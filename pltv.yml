@@ -1,0 +1,8 @@
+name: pltv
+dependencies:
+  - python=3.9
+  - jupyter
+  - numpy
+  - pandas
+  - plotly
+  - scipy
