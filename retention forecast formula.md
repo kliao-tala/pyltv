@@ -47,6 +47,8 @@
     if we have actuals, return the actuals, else compute the forecast."
     DATEDIF($B44,$B$4,"m")>BD$6,
     BD13,
+
+    "previous value * (max monthly borrower | (A * t**B)/(A * (t-1)**B)) Whichever is smaller.
     BC44*MIN(Inputs!$D$12,($BB44*BD$6^$BC44)/($BB44*BC$6^$BC44))
     
 )
