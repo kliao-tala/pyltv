@@ -636,6 +636,55 @@ class Model:
                     # add retention
                     c_data['borrower_retention'] = self.borrower_retention(c_data)
 
+                elif self.method == 'sbg-slope':
+                    c = c_data['Count Borrowers'].dropna()
+
+                    # define bounds for alpha and beta (must be positive)
+                    bounds = ((0, 1e5), (0, 1e5))
+
+                    # use scipy's minimize function on log_likelihood to optimize alpha and beta
+                    results = minimize(log_likelihood, np.array([alpha, beta]), args=c, bounds=bounds)
+
+                    alpha, beta = results.x
+
+                    # generate the full range of times to forecast over
+                    times = np.arange(1, months + 2)
+
+                    # take the slope of the power fit between the current and previous time periods
+                    survival = []
+                    for t in times:
+                        if t == 1:
+                            survival.append(s(t, alpha, beta))
+                        else:
+                            survival.append(s(t, alpha, beta)/s(t-1, alpha, beta))
+
+                    # get max survival from inputs
+                    max_survival = self.inputs.loc['ke', 'max_monthly_borrower_retention']
+
+                    # apply max survival condition
+                    survival_capped = np.array([i if i < max_survival else max_survival for i in survival])
+                    # only need values for times we're going to forecast for.
+                    survival_capped = survival_capped[len(c):]
+                    survival_capped = pd.Series(survival_capped, index=[t for t in times[len(c):]])
+
+                    # forecasted values
+                    c_fcast = c.copy()
+                    for t in times[len(c):]:
+                        c_fcast.loc[t] = c_fcast[t - 1] * survival_capped[t]
+
+                    # fill in the forecasted data
+                    c_data['borrower_retention'] = c_data['borrower_retention'].fillna(c_fcast)
+
+                    # compute Count Borrowers
+                    fcast_count = []
+                    for t in forecast.index:
+                        if t < len(c_data['Count Borrowers'].dropna()):
+                            fcast_count.append(c_data.loc[t, 'Count Borrowers'])
+                        else:
+                            fcast_count.append(c_data.loc[0, 'Count Borrowers'] * forecast[t])
+
+                    c_data['Count Borrowers'] = pd.Series(fcast_count)
+
                 # compute survival
                 c_data['borrower_survival'] = self.borrower_survival(c_data)
 
