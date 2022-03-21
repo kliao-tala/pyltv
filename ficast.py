@@ -525,7 +525,7 @@ class Model:
 
         for cohort in data.cohort.unique():
             # data for current cohort
-            c_data = data[data.cohort == cohort]
+            c_data = data[data.cohort == cohort].copy()
 
             # starting cohort size
             n = c_data.loc[0, 'Count Borrowers']
@@ -789,7 +789,7 @@ class Model:
 
         backtest_data = pd.concat(limited_data)
         backtest_report = pd.concat(backtest_report, axis=0)
-        backtest_report.loc[:,'cohort'] = backtest_report.index
+        backtest_report['cohort'] = backtest_report.index
 
         self.backtest_data = backtest_data
         self.backtest_report = backtest_report
