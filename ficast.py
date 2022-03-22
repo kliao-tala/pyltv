@@ -671,6 +671,41 @@ class Model:
                     # add retention
                     c_data['borrower_retention'] = self.borrower_retention(c_data)
 
+                elif self.method == 'sbg-slope-scaled':
+                    c = c_data['Count Borrowers'].dropna()
+
+                    # define bounds for alpha and beta (must be positive)
+                    bounds = ((0, 1e5), (0, 1e5))
+
+                    # use scipy's minimize function on log_likelihood to optimize alpha and beta
+                    results = minimize(log_likelihood, np.array([alpha, beta]), args=c, bounds=bounds)
+                    alpha, beta = results.x
+
+                    # list to hold forecasted values
+                    forecast = [c.iloc[0]]
+                    for t in times:
+                        forecast.append(n * s(t, alpha, beta))
+
+                    # convert list to dataframe
+                    count_forecast = pd.DataFrame(forecast, index=[0]+times, columns=['Count Borrowers'])
+                    survival_forecast = 0.98 * count_forecast/count_forecast.shift(1)
+
+                    # get max survival from inputs
+                    max_survival = self.inputs.loc['ke', 'max_monthly_borrower_retention'].astype(float)
+
+                    # cap survival at max from inputs
+                    survival_forecast = survival_forecast['Count Borrowers'].apply(lambda x: \
+                                                           x if x <= max_survival else max_survival)
+
+                    c_fcast = c_data['Count Borrowers'].copy()
+                    for t in times[len(c)-1:]:
+                        c_fcast.loc[t] = float(c_fcast.loc[t - 1] * survival_forecast.loc[t])
+
+                    c_data['Count Borrowers'] = c_data['Count Borrowers'].fillna(c_fcast)
+
+                    # add retention
+                    c_data['borrower_retention'] = self.borrower_retention(c_data)
+
 
                 # --- ALL OTHERS --- #
 
