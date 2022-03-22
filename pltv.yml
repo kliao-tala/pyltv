@@ -7,3 +7,5 @@ dependencies:
   - plotly
   - scipy
   - snowflake-connector-python
+  - statsmodels
+  - pmdarima

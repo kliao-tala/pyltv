@@ -578,7 +578,7 @@ class Model:
                         b = popt[1]
 
                         # if there is less than 6 months of actuals, scale data.
-                        if 6 - len(c) > 0:
+                        if len(c) < 6:
                             b = b + .2 * (6 - len(c) - 1)
 
                         # get max survival from inputs
@@ -654,6 +654,13 @@ class Model:
                     # convert list to dataframe
                     count_forecast = pd.DataFrame(forecast, index=[0]+times, columns=['Count Borrowers'])
                     survival_forecast = count_forecast/count_forecast.shift(1)
+
+                    # get max survival from inputs
+                    max_survival = self.inputs.loc['ke', 'max_monthly_borrower_retention'].astype(float)
+
+                    # cap survival at max from inputs
+                    survival_forecast = survival_forecast['Count Borrowers'].apply(lambda x: \
+                                                           x if x <= max_survival else max_survival)
 
                     c_fcast = c_data['Count Borrowers'].copy()
                     for t in times[len(c)-1:]:
