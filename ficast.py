@@ -274,10 +274,11 @@ class Model:
 
     def clean_data(self):
         # fix date inconsistencies
-        self.data = self.data.replace({'2021-9': '2021-09', '2021-8': '2021-08', \
-                                       '2021-7': '2021-07', '2021-6': '2021-06', \
-                                       '2021-5': '2021-05', '2021-4': '2021-04', \
-                                       '2020-9': '2020-09'})
+        for date in self.data['First Loan Local Disbursement Month'].unique():
+            if len(date) < 7:
+                year, month = date.split('-')
+                month = '0' + month
+                self.data = self.data.replace({date: year + '-' + month})
 
         # sort by months since first disbursement
         self.data = self.data.sort_values(['First Loan Local Disbursement Month',
