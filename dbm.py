@@ -93,7 +93,7 @@ class DBM:
 
         Parameters
         ----------
-        sql_file_path: str
+        sql_file_path : str
             pathname of sql file containing query to run
         """
         with open(sql_file_path) as f:
@@ -108,7 +108,7 @@ class DBM:
 
         Parameters
         ----------
-        query: str
+        query : str
             sql query statement
         """
         with self.ctx.cursor() as curs:
@@ -122,13 +122,13 @@ class DBM:
 
         Parameters
         ----------
-        market: str
+        market : str
             market to query data for
 
-        start_date: str
+        start_date : str
             the earliest date to query data for
 
-        days_before: int
+        days_before : int
             the number of days, prior to the current date, to query date up until
         """
 

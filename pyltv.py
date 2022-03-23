@@ -1,3 +1,8 @@
+# ---------------------------------------------------------------------------------------------------------------------
+# LTV Forecasting Library
+#
+# This library defines a Model class that provides functionality for LTV data modeling and forecasting.
+# ---------------------------------------------------------------------------------------------------------------------
 import numpy as np
 import pandas as pd
 from scipy.optimize import curve_fit, minimize
@@ -13,9 +18,10 @@ pio.templates.default = "plotly_white"
 
 # --- MODEL --- #
 class Model:
-    """
-    sBG model class containing all functionality for creating, analyzing, and backtesting
-    the sBG model.
+    """Data Modeling Class
+
+    Contains functionality to clean, model, and visualize LTV data, as well as implement various forecasting strategies
+    and backtest them.
 
     Parameters
     ----------
@@ -29,36 +35,56 @@ class Model:
 
     borrower_retention(cohort_data)
         Computes borrower retention.
-
     """
 
-    def __init__(self, data, market='ke', fcast_method='powerslope',
-                 alpha=1, beta=1, dollar_ex=0.00925, eps=1e-50):
+    def __init__(self, data, market='ke', fcast_method='powerslope', alpha=1, beta=1, dollar_ex=0.00925, eps=1e-50):
+        """
+
+        :param data:
+        :param market:
+        :param fcast_method:
+        :param alpha:
+        :param beta:
+        :param dollar_ex:
+        :param eps:
+        """
         self.data = data
-        self.inputs = None
-        self.ltv_expected = None
         self.market = market
         self.method = fcast_method
         self.alpha = alpha
         self.beta = beta
         self.dollar_ex = dollar_ex
         self.eps = eps
-        self.min_months = None
         self.forecast_cols = ['Count Borrowers', 'borrower_retention', 'borrower_survival', 'loan_size',
                               'loans_per_borrower', 'Count Loans', 'Total Amount', 'interest_rate', 'default_rate_7dpd',
                               'default_rate_51dpd', 'default_rate_365dpd', 'loans_per_original',
                               'origination_per_original', 'revenue_per_original', 'cm$_per_original',
                               'opex_per_original', 'ltv_per_original', 'cm%_per_original']
 
+        # model attributes to be defined later on
+        self.inputs = None
+        self.ltv_expected = None
+        self.min_months = None
+        self.forecast = None
+        self.backtest = None
+
         self.load_dependent_data()
         self.clean_data()
 
     def load_dependent_data(self):
+        """
+        Loads other data that the model depends on. ltv_inputs.csv contains various constants
+        used by the powerslope regression model as well as repayment rates. ltv_expected.csv
+        contains the historical LTV data.
+        """
         self.inputs = pd.read_csv('data/ltv_inputs.csv').set_index('market')
         self.ltv_expected = pd.read_csv('data/ltv_expected.csv')
 
     def clean_data(self):
-        # fix date inconsistencies
+        """
+        Performs various data clean up steps to prepare data for model.
+        """
+        # add a leading 0 to the month if there isn't one already to match rest of the data
         for date in self.data['First Loan Local Disbursement Month'].unique():
             if len(date) < 7:
                 year, month = date.split('-')
@@ -72,11 +98,20 @@ class Model:
         # remove all columns calculated through looker
         self.data = self.data.loc[:, :"Default Rate Amount 51D"]
 
-        # add more convenient cohort column
+        # add more convenient cohort label column
         self.data['cohort'] = self.data['First Loan Local Disbursement Month']
 
     # --- DATA FUNCTIONS --- #
     def borrower_retention(self, cohort_data):
+        """
+        Computes borrower retention from Count Borrowers. At each time period, retention is simply Count Borrowers
+        divided by the original cohort size.
+
+        Parameters
+        ----------
+        cohort_data: pd.DataFrame
+            Dataframe containing Count Borrowers for a single cohort.
+        """
         return cohort_data['Count Borrowers'] / cohort_data['Count Borrowers'].max()
 
     def borrower_survival(self, cohort_data):
@@ -105,7 +140,7 @@ class Model:
                                      self.inputs.loc['ke', 'recovery_30-51'])
 
             ## fill null 51dpd values with 7dpd values based on recovery rates
-            derived_51dpd = (cohort_data['Count Loans'] * (cohort_data['default_rate_7dpd']) - \
+            derived_51dpd = (cohort_data['Count Loans'] * (cohort_data['default_rate_7dpd']) -
                              cohort_data['Count Loans'] * (cohort_data['default_rate_7dpd']) * recovery_rate_51) / \
                             cohort_data['Count Loans']
 
@@ -118,8 +153,8 @@ class Model:
             recovery_rate_365 = float(self.inputs.loc['ke', 'recovery_51_'])
 
             ## fill null 365dpd values with 51dpd values based on recovery rates
-            derived_365dpd = (cohort_data['Count Loans'] * (cohort_data['default_rate_51dpd']) - \
-                              cohort_data['Count Loans'] * (cohort_data['default_rate_51dpd']) * \
+            derived_365dpd = (cohort_data['Count Loans'] * (cohort_data['default_rate_51dpd']) -
+                              cohort_data['Count Loans'] * (cohort_data['default_rate_51dpd']) *
                               recovery_rate_365) / cohort_data['Count Loans']
 
             return default_rate.fillna(derived_365dpd)
