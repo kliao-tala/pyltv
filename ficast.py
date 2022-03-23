@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 from scipy.optimize import curve_fit, minimize
 import snowflake.connector
+from sbg import s, log_likelihood
 
 # for private key handling
 from cryptography.hazmat.backends import default_backend
@@ -14,124 +15,19 @@ import plotly.io as pio
 pio.templates.default = "plotly_white"
 
 
-# --- METHODS --- #
-def p(t, alpha, beta):
-    """
-    Probability that a customer fails to take out another loan (probability to churn).
-    For the derivation of this equation, see the original Fader & Hardie paper. This
-    recursion formula takes two constants, alpha and beta, which are fit to actual data.
-    It then allows you to compute the probability of churn for a given time period, t.
-
-    Parameters
-    ----------
-    t : int
-        Time period.
-    alpha : float
-        Fitting parameter.
-    beta : float
-        Fitting parameter.
-
-    Returns
-    -------
-    P : float
-        Probability of churn.
-    """
-
-    eps = 1e-50
-
-    if alpha + beta < eps:
-        if t == 1:
-            return alpha / (eps)
-        else:
-            return p(t-1, alpha, beta) * (beta + t-2) / (eps + t-1)
-    else:
-        if t == 1:
-            return alpha / (alpha + beta)
-        else:
-            return p(t-1, alpha, beta) * (beta + t-2) / (alpha + beta + t-1)
-
-
-def s(t, alpha, beta):
-    """
-    Survival function: the probability that a customer has survived to time t.
-    For the derivation of this equation, see the original Fader & Hardie paper. This
-    recursion formula takes two constants, alpha and beta, which are fit to actual data.
-    It also requires computation of P (probability of a customer churning).
-
-    Parameters
-    ----------
-    t : int
-        Time period.
-    alpha : float
-        Fitting parameter.
-    beta : float
-        Fitting parameter.
-
-    Returns
-    -------
-    S : float
-        Probability of survival.
-    """
-
-    if t == 1:
-        return 1 - p(t, alpha, beta)
-    else:
-        return s(t - 1, alpha, beta) - p(t, alpha, beta)
-
-
-def log_likelihood(params, c):
-    """
-    Computes the *negative* log-likelihood of the probability distribution of customers
-    still being active at time t. For a derivation of the log-likelihood, see Appendix A
-    in the original Fader & Hardie paper. The function computes the log-likelihood at
-    every time step, t, leading up to the last time period T. The final value is simply
-    the sum of the log-likelihood computed at each time step. In the end, we return the
-    negative of the log-likelihood so that we can use scipy's minimize function to optimize
-    for the values of alpha and beta.
-
-    Parameters
-    ----------
-    params : array
-        Array containing alpha and beta values.
-    c : array
-        Array containing borrower count for a given cohort.
-
-    Returns
-    -------
-    ll : float
-        log-likelihood value
-    """
-
-    alpha, beta = params
-    eps = 1e-50
-
-    # initialize log-likelihood (ll) value at 0
-    ll = 0
-
-    # for each time period in the *actual* data, compute ll and add it to the running total
-    for t in c[1:].index:
-        # if P is less than epsilon, replace it with epsilon.
-        if p(t, alpha, beta) < eps:
-            ll += (c[t-1] - c[t]) * np.log(eps)
-        else:
-            ll += (c[t-1] - c[t]) * np.log(p(t, alpha, beta))
-
-    # add the final term which is associated with customers who are still active at the end
-    # of the final period.
-
-    # replace the argument of the np.log() function with epsilon if smaller than epsilon.
-    if s((len(c) - 1) - 1, alpha, beta) - p(len(c) - 1, alpha, beta) < eps:
-        ll += c.iloc[-1] * np.log(eps)
-    else:
-        ll += c.iloc[-1] * np.log(s((len(c) - 1) - 1, alpha, beta) - p(len(c) - 1, alpha, beta))
-
-    return -ll
-
-
 # --- DATABASE MANAGER --- #
 class DBM:
     """
     Database manager.
+
+    Parameters
+    ----------
+    user : str
+        user account name
+    account : str
+        snowflake account name
+    warehouse : str
+        snowflake warehouse name
     """
 
     def __init__(self, user=None, account='ng95977', warehouse='BUSINESS_WH'):
@@ -149,10 +45,17 @@ class DBM:
 
     def get_private_key_bytes(self, keyfile, keypass):
         """
+        Loads private key from keyfile and sets keypass if specified.
 
-        :param keyfile:
-        :param keypass:
-        :return:
+        Parameters
+        ----------
+        keyfile : str
+            location of keyfile
+
+        Returns
+        -------
+        pkey
+            private key bytes
         """
 
         with open(keyfile, "rb") as key:
@@ -170,6 +73,13 @@ class DBM:
                 encryption_algorithm=serialization.NoEncryption())
 
     def connect(self, pkey):
+        """
+        Instantiates connection object to snowflake warehouse.
+
+        :param pkey:
+            private key
+        :return:
+        """
         self.ctx = snowflake.connector.connect(
             user=f'{self.user}@tala.co',
             account=f'{self.account}',
@@ -178,6 +88,12 @@ class DBM:
         )
 
     def run_sql(self, sql_file_path=None):
+        """
+        
+
+        :param sql_file_path:
+        :return:
+        """
         with open(sql_file_path) as f:
             query = f.read()
             with self.ctx.cursor() as curs:
@@ -249,7 +165,7 @@ class Model:
     """
 
     def __init__(self, data, market='ke', fcast_method='powerslope',
-                 alpha=1, beta=1, dollar_ex=0.00925):
+                 alpha=1, beta=1, dollar_ex=0.00925, eps=1e-50):
         self.data = data
         self.inputs = None
         self.ltv_expected = None
@@ -258,6 +174,7 @@ class Model:
         self.alpha = alpha
         self.beta = beta
         self.dollar_ex = dollar_ex
+        self.eps = eps
         self.min_months = None
         self.forecast_cols = ['Count Borrowers', 'borrower_retention', 'borrower_survival', 'loan_size',
                               'loans_per_borrower', 'Count Loans', 'Total Amount', 'interest_rate', 'default_rate_7dpd',
