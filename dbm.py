@@ -29,7 +29,7 @@ class DBM:
         snowflake warehouse name
     """
 
-    def __init__(self, user=None, account='ng95977', warehouse='BUSINESS_WH'):
+    def __init__(self, user=None, account='ng95977', warehouse='BI_ENGINEERING_XLARGE'):
         self.user = user
         self.account = account
         self.warehouse = warehouse
@@ -84,7 +84,7 @@ class DBM:
             user=f'{self.user}@tala.co',
             account=f'{self.account}',
             private_key=pkey,
-            warehouse=''
+            warehouse=self.warehouse
         )
 
     def run_sql(self, sql_file_path=None):

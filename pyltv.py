@@ -103,6 +103,14 @@ class Model:
         self.load_dependent_data()
         self.clean_data()
 
+        # print the date range that the data spans
+        min_date = str(pd.to_datetime(self.data.cohort).min())[:7]
+        max_date = str(pd.to_datetime(self.data.cohort).max())[:7]
+        n_months = self.data.cohort.nunique()
+        print(f'Data spans {min_date} to {max_date}')
+        print(f'Total # of cohorts: {n_months}')
+        print('...')
+
     def load_dependent_data(self):
         """
         Loads other data that the model depends on. ltv_inputs.csv contains various inputs required for the forecasting
@@ -344,7 +352,7 @@ class Model:
         # for each cohort
         for cohort in self.data.loc[:, 'First Loan Local Disbursement Month'].unique():
             # omit the last two months of incomplete data
-            cohort_data = self.data[self.data['First Loan Local Disbursement Month'] == cohort].iloc[:-2, :]
+            cohort_data = self.data[self.data['First Loan Local Disbursement Month'] == cohort].iloc[:-1, :]
 
             # call data functions to generate calculated features
             cohort_data['borrower_retention'] = self.borrower_retention(cohort_data)
