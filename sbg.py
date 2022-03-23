@@ -9,11 +9,11 @@
 # -----------------------------------------------------------------
 import numpy as np
 
-# --- Model Constants --- #
+# --- MODEL CONSTANTS --- #
 eps = 1e-50
 
 
-# --- Model Methods --- #
+# --- MODEL METHODS --- #
 def p(t, alpha, beta):
     """
     Probability that a customer fails to take out another loan (probability to churn).

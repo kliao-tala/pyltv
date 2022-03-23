@@ -1,146 +1,14 @@
 import numpy as np
 import pandas as pd
 from scipy.optimize import curve_fit, minimize
-import snowflake.connector
 from sbg import s, log_likelihood
-
-# for private key handling
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import serialization
 
 # plotting
 from plotly import graph_objects as go
 import plotly.io as pio
+
 # change default plotly theme
 pio.templates.default = "plotly_white"
-
-
-# --- DATABASE MANAGER --- #
-class DBM:
-    """
-    Database manager.
-
-    Parameters
-    ----------
-    user : str
-        user account name
-    account : str
-        snowflake account name
-    warehouse : str
-        snowflake warehouse name
-    """
-
-    def __init__(self, user=None, account='ng95977', warehouse='BUSINESS_WH'):
-        self.user = user
-        self.account = account
-        self.warehouse = warehouse
-        self.ctx = None
-        self.data = None
-
-        # get private key
-        pkey = self.get_private_key_bytes(f'/Users/{self.user}/.ssh/snowflake_private_keypair.pem', None)
-
-        # connect to snowflake
-        self.connect(pkey)
-
-    def get_private_key_bytes(self, keyfile, keypass):
-        """
-        Loads private key from keyfile and sets keypass if specified.
-
-        Parameters
-        ----------
-        keyfile : str
-            location of keyfile
-
-        Returns
-        -------
-        pkey
-            private key bytes
-        """
-
-        with open(keyfile, "rb") as key:
-            keypass_encoded = None
-            if keypass:
-                keypass_encoded = keypass.encode()
-            p_key = serialization.load_pem_private_key(
-                key.read(),
-                password=keypass_encoded,
-                backend=default_backend())
-
-            return p_key.private_bytes(
-                encoding=serialization.Encoding.DER,
-                format=serialization.PrivateFormat.PKCS8,
-                encryption_algorithm=serialization.NoEncryption())
-
-    def connect(self, pkey):
-        """
-        Instantiates connection object to snowflake warehouse.
-
-        :param pkey:
-            private key
-        :return:
-        """
-        self.ctx = snowflake.connector.connect(
-            user=f'{self.user}@tala.co',
-            account=f'{self.account}',
-            private_key=pkey,
-            warehouse=''
-        )
-
-    def run_sql(self, sql_file_path=None):
-        """
-        
-
-        :param sql_file_path:
-        :return:
-        """
-        with open(sql_file_path) as f:
-            query = f.read()
-            with self.ctx.cursor() as curs:
-                results = curs.execute(query)
-                return pd.DataFrame.from_records(iter(results), columns=[c[0] for c in results.description])
-
-    def query_db(self, query):
-        with self.ctx.cursor() as curs:
-            results = curs.execute(query)
-            return pd.DataFrame.from_records(iter(results), columns=[c[0] for c in results.description])
-
-    def get_market_data(self, market='ke', start_date='2020-09-01', days_before=60):
-
-        cols = ['First Loan Local Disbursement Month',
-                'Months Since First Loan Disbursed',
-                'Count First Loans',
-                'Count Borrowers',
-                'Count Loans',
-                'Total Amount',
-                'Total Interest Assessed',
-                'Total Rollover Charged',
-                'Total Rollover Reversed',
-                'Default Rate Amount 7D',
-                'Default Rate Amount 30D',
-                'Default Rate Amount 51D',
-                'Default Rate Amount 365D']
-
-        if market != 'ke':
-            query_params = {'REPLACE_DATE': start_date,
-                            'REPLACE_DAYS': str(days_before),
-                            '_KE': f'_{market.upper()}'}
-        else:
-            query_params = {'REPLACE_DATE': start_date,
-                            'REPLACE_DAYS': str(days_before)}
-
-        with open('queries/ke_ltv.sql') as f:
-            sql = f.read()
-            for p in query_params:
-                sql = sql.replace(p, query_params[p])
-
-        data = self.query_db(sql)
-
-        data.columns = cols
-
-        self.data = data
-
-        return data
 
 
 # --- MODEL --- #
