@@ -30,8 +30,11 @@ class Model:
 
     Methods
     -------
-    clean_data
-        Performs all data cleaning steps and returns the cleaned data.
+    load_dependent_data()
+        Load data that the models depend on such as recovery rates, opex, and cost of capital.
+
+    clean_data()
+        Performs all data cleaning steps required before modeling.
 
     borrower_retention(cohort_data)
         Computes borrower retention.
@@ -39,14 +42,35 @@ class Model:
 
     def __init__(self, data, market='ke', fcast_method='powerslope', alpha=1, beta=1, dollar_ex=0.00925, eps=1e-50):
         """
+        Sets model attributes, loads additional data required for models (inputs & ltv_expected), and cleans data.
 
-        :param data:
-        :param market:
-        :param fcast_method:
-        :param alpha:
-        :param beta:
-        :param dollar_ex:
-        :param eps:
+        Parameters
+        ----------
+        data : pandas DataFrame
+            LTV data loaded from the Looker dashboard: https://inventure.looker.com/looks/7451
+
+        market : str
+            The market the data corresponds to (KE, PH, MX, etc.).
+
+        fcast_method : str
+            String specifying the forecasting methodology to employ. Currently there are 4 methods:
+                - powerslope:
+                - sbg:
+                - sbg-slope:
+                - sbg-slope-scaled:
+
+        alpha : int
+            Value to initialize alpha. alpha is later optimized by minimizing the loglikelihood function.
+
+        beta : int
+            Value to initialize beta. beta is later optimized by minimizing the loglikelihood function.
+
+        dollar_ex : float
+            Dollar currency conversion rate. Used to convert from data's local currency to USD.
+
+        eps : float
+            Epsilon is a small constant used to prevent errors in floating point computations involving very small
+            (close to 0) numbers, such as during division or taking the natural logarithm.
         """
         self.data = data
         self.market = market
@@ -68,14 +92,14 @@ class Model:
         self.forecast = None
         self.backtest = None
 
+        # load data that the models depend on and clean LTV data from Looker
         self.load_dependent_data()
         self.clean_data()
 
     def load_dependent_data(self):
         """
-        Loads other data that the model depends on. ltv_inputs.csv contains various constants
-        used by the powerslope regression model as well as repayment rates. ltv_expected.csv
-        contains the historical LTV data.
+        Loads other data that the model depends on. ltv_inputs.csv contains various inputs required for the forecasting
+        models. ltv_expected.csv contains the historical LTV data.
         """
         self.inputs = pd.read_csv('data/ltv_inputs.csv').set_index('market')
         self.ltv_expected = pd.read_csv('data/ltv_expected.csv')
@@ -109,31 +133,110 @@ class Model:
 
         Parameters
         ----------
-        cohort_data: pd.DataFrame
+        cohort_data : pandas DataFrame
             Dataframe containing Count Borrowers for a single cohort.
+
+        Returns
+        -------
+        borrower_retention : pandas Series
+            Retention rate for each time period for the given cohort.
         """
         return cohort_data['Count Borrowers'] / cohort_data['Count Borrowers'].max()
 
     def borrower_survival(self, cohort_data):
+        """
+        Computes borrower survival from Count Borrowers. At each time period, survival is equal to borrower_retention
+        divided by borrower_retention in the previous period. This is equivalent to Count Borrowers divided by Count
+        Borrowers in the previous period.
+
+        Parameters
+        ----------
+        cohort_data : pandas DataFrame
+            Dataframe containing Count Borrowers for a single cohort.
+
+        Returns
+        -------
+        borrower_survival : pandas Series
+            Survival rate for each time period for the given cohort.
+        """
         return cohort_data['borrower_retention'] / cohort_data['borrower_retention'].shift(1)
 
     def loans_per_borrower(self, cohort_data):
+        """
+        Computes the average number of loans per borrower. Loans per borrower is equal to Count Loans divided by Count
+        Borrowers.
+
+        Parameters
+        ----------
+        cohort_data : pandas DataFrame
+            Dataframe containing Count Borrowers for a single cohort.
+
+        Returns
+        -------
+        loans_per_borrower : pandas Series
+            The average number of loans per borrower for each time period for the given cohort.
+        """
         return cohort_data['Count Loans'] / cohort_data['Count Borrowers']
 
-    def loan_size(self, cohort_data, to_usd):
+    def loan_size(self, cohort_data, to_usd=True):
+        """
+        Computes the average loan size per borrower. Loan size is equal to Total Amount divided by Count Loans.
+
+        Parameters
+        ----------
+        cohort_data : pandas DataFrame
+            Dataframe containing Count Borrowers for a single cohort.
+
+        to_usd : bool
+            If True, converts local currency to USD using the exchange rate set by self.dollar_ex. If false, the local
+            currency is not converted to USD.
+
+        Returns
+        -------
+        loan_size : pandas Series
+            The average loan size for each time period for the given cohort.
+        """
         df = cohort_data['Total Amount'] / cohort_data['Count Loans']
         if to_usd:
             df *= self.dollar_ex
         return df
 
     def interest_rate(self, cohort_data):
+        """
+        Computes the average interest rate per loan. Interest Rate is equal to Total Interest Assessed divided by
+        Total Amount.
+
+        Parameters
+        ----------
+        cohort_data : pandas DataFrame
+            Dataframe containing Count Borrowers for a single cohort.
+
+        Returns
+        -------
+        loan_size : pandas Series
+            The average loan size for each time period for the given cohort.
+        """
         return cohort_data['Total Interest Assessed'] / cohort_data['Total Amount']
 
-    def default_rate(self, cohort_data, period=7):
-        if period == 7:
-            return cohort_data['Default Rate Amount 7D'].fillna(0)
+    def default_rate(self, cohort_data, dpd=7):
+        """
+        Computes the default rate for a specified days past due (dpd). The 7dpd default rate is taken as is from the
+        raw LTV data and null values are filled in with 0.
 
-        elif period == 51:
+        Parameters
+        ----------
+        cohort_data : pandas DataFrame
+            Dataframe containing Count Borrowers for a single cohort.
+
+        Returns
+        -------
+        loan_size : pandas Series
+            The average loan size for each time period for the given cohort.
+        """
+        if dpd == 7:
+            return cohort_data['Default Rate Amount 7D']
+
+        elif dpd == 51:
             default_rate = cohort_data['Default Rate Amount 51D']
 
             recovery_rate_51 = float(self.inputs.loc['ke', 'recovery_7-30'] + \
@@ -146,7 +249,7 @@ class Model:
 
             return default_rate.fillna(derived_51dpd)
 
-        elif period == 365:
+        elif dpd == 365:
             # get actual data if it exists
             default_rate = np.nan * cohort_data['Default Rate Amount 51D']
 
