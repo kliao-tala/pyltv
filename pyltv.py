@@ -455,6 +455,8 @@ class Model:
             for cohort in curves:
                 traces.append(go.Bar(name=cohort.name, x=cohort.index, y=cohort))
 
+            
+
             metric = param.split('-')[1].upper()
             fig = go.Figure(traces)
             fig.update_layout(title=f'{self.backtest_months} Month Backtest - {metric}',
@@ -831,3 +833,15 @@ class Model:
         backtest_report['cohort'] = backtest_report.index
 
         return backtest_data, backtest_report
+
+    def run_all(self, backtest_months=4):
+        self.generate_features()
+        self.forecast = self.forecast_data(self.data)
+        self.backtest, self.backtest_report = self.backtest_data(self.data, months=backtest_months)
+
+        print('...')
+        print('Data is clean, forecasted, and backtested.')
+        print('')
+        print('-----')
+        print('Access forecast data with {model name}.forecast, and backtest')
+        print('data with {model name}.backtest and {model name}.backtest_report')
