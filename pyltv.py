@@ -455,7 +455,10 @@ class Model:
             for cohort in curves:
                 traces.append(go.Bar(name=cohort.name, x=cohort.index, y=cohort))
 
-            
+            # add a line showing the overall mean
+            mean_df = pd.DataFrame(float(self.backtest_report[param].mean()),
+                                   index=self.backtest_report.index, columns=['mean'])
+            traces.append(go.Scatter(name='mean', x=mean_df.index, y=mean_df['mean'], mode='lines'))
 
             metric = param.split('-')[1].upper()
             fig = go.Figure(traces)
