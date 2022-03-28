@@ -42,7 +42,7 @@ class Model:
     """
 
     def __init__(self, data, market='ke', fcast_method='powerslope', alpha=1, beta=1,
-                 dollar_ex=0.00925, eps=1e-50):
+                 dollar_ex=0.00925, eps=1e-50, default_scaling=None):
         """
         Sets model attributes, loads additional data required for models (inputs &
         ltv_expected), and cleans data.
@@ -88,6 +88,7 @@ class Model:
         self.beta = beta
         self.dollar_ex = dollar_ex
         self.eps = eps
+        self.default_scaling = default_scaling
         self.forecast_cols = ['Count Borrowers', 'borrower_retention', 'borrower_survival', 'loan_size',
                               'loans_per_borrower', 'Count Loans', 'Total Amount', 'interest_rate',
                               'default_rate_7dpd', 'default_rate_51dpd', 'default_rate_365dpd',
@@ -239,7 +240,7 @@ class Model:
         """
         return cohort_data['Total Interest Assessed'] / cohort_data['Total Amount']
 
-    def default_rate(self, cohort_data, dpd=7):
+    def default_rate(self, cohort_data, dpd=7, default_scaling=None):
         """
         Computes the default rate for a specified days past due (dpd). The 7dpd
         default rate is taken as is from the raw LTV data and null values are
@@ -253,6 +254,9 @@ class Model:
         dpd : int
             The number of days past due which defines the range of time to compute
             the default rate over.
+        default_scaling : float
+            Scaling factor to test what-if scenarios. A value greater than 1 increases
+            the 7dpd default rate while a value less than 1 decreases it by the scale.
 
         Returns
         -------
@@ -260,7 +264,10 @@ class Model:
             The average default rate at the specified dpd.
         """
         if dpd == 7:
-            return cohort_data['Default Rate Amount 7D']
+            if default_scaling:
+                return cohort_data['Default Rate Amount 7D'] * default_scaling
+            else:
+                return cohort_data['Default Rate Amount 7D']
 
         elif dpd == 51:
             default_rate = cohort_data['Default Rate Amount 51D']
@@ -364,11 +371,17 @@ class Model:
             cohort_data['default_rate_51dpd'] = self.default_rate(cohort_data, dpd=51)
             cohort_data['default_rate_365dpd'] = self.default_rate(cohort_data, dpd=365)
             cohort_data['loans_per_original'] = self.loans_per_original(cohort_data)
+            cohort_data['cumulative_loans_per_original'] = cohort_data['loans_per_original'].cumsum()
             cohort_data['origination_per_original'] = self.origination_per_original(cohort_data, to_usd)
+            cohort_data['cumulative_origination_per_original'] = cohort_data['origination_per_original'].cumsum()
             cohort_data['revenue_per_original'] = self.revenue_per_original(cohort_data, to_usd)
+            cohort_data['cumulative_revenue_per_original'] = cohort_data['revenue_per_original'].cumsum()
             cohort_data['cm$_per_original'] = self.credit_margin(cohort_data)
+            cohort_data['cumulative_cm$_per_original'] = cohort_data['cm$_per_original'].cumsum()
             cohort_data['opex_per_original'] = self.opex_per_original(cohort_data)
+            cohort_data['cumulative_opex_per_original'] = cohort_data['opex_per_original'].cumsum()
             cohort_data['ltv_per_original'] = self.ltv_per_original(cohort_data)
+            cohort_data['cumulative_ltv_per_original'] = cohort_data['ltv_per_original'].cumsum()
             cohort_data['cm%_per_original'] = self.credit_margin_percent(cohort_data)
 
             # reset the index and append the data
@@ -469,7 +482,7 @@ class Model:
             fig.show()
 
     # --- FORECAST FUNCTIONS --- #
-    def forecast_data(self, data, min_months=4, months=24, to_usd=True):
+    def forecast_data(self, data, min_months=4, n_months=24, to_usd=True):
         """
         Generates a forecast of "Count Borrowers" out to the input number of months.
         The original and forecasted values are returned as a new dataframe, set as
@@ -493,7 +506,7 @@ class Model:
         forecast_dfs = []
 
         # range of desired time periods
-        times = list(range(1, months + 1))
+        times = list(range(1, n_months + 1))
         times_dict = {i: i for i in times}
 
         for cohort in data.cohort.unique():
@@ -507,7 +520,7 @@ class Model:
             if len(c_data) >= min_months:
 
                 # null df used to extend original cohort df to desired number of forecast months
-                dummy_df = pd.DataFrame(np.nan, index=range(0, months + 1), columns=['null'])
+                dummy_df = pd.DataFrame(np.nan, index=times, columns=['null'])
 
                 # create label column to denote actual vs forecast data
                 c_data.loc[:, 'data_type'] = 'actual'
@@ -545,7 +558,7 @@ class Model:
                         popt, pcov = curve_fit(power_fit, c.index, c)
 
                         # generate the full range of times to forecast over
-                        times = np.arange(1, months + 2)
+                        times = np.arange(1, n_months + 2)
 
                         a = popt[0]
                         b = popt[1]
@@ -720,7 +733,7 @@ class Model:
 
                 params, covs = curve_fit(func, default.index, default)
 
-                t = list(range(1, months + 2))
+                t = list(range(1, n_months + 2))
                 fit = func(t, params[0], params[1])
                 fit = pd.Series(fit, index=t).reset_index(drop=True)
 
@@ -730,13 +743,23 @@ class Model:
                 c_data['default_rate_51dpd'] = self.default_rate(c_data, dpd=51)
                 c_data['default_rate_365dpd'] = self.default_rate(c_data, dpd=365)
 
+                if self.default_scaling:
+                    c_data['default_rate_7dpd'] = self.default_scaling * c_data['default_rate_7dpd']
+                    c_data['default_rate_365dpd'] = self.default_scaling * c_data['default_rate_365dpd']
+
                 # compute remaining columns from forecasts
                 c_data['loans_per_original'] = self.loans_per_original(c_data)
+                c_data['cumulative_loans_per_original'] = c_data['loans_per_original'].cumsum()
                 c_data['origination_per_original'] = self.origination_per_original(c_data, to_usd)
+                c_data['cumulative_origination_per_original'] = c_data['origination_per_original'].cumsum()
                 c_data['revenue_per_original'] = self.revenue_per_original(c_data, to_usd)
+                c_data['cumulative_revenue_per_original'] = c_data['revenue_per_original'].cumsum()
                 c_data['cm$_per_original'] = self.credit_margin(c_data)
+                c_data['cumulative_cm$_per_original'] = c_data['cm$_per_original'].cumsum()
                 c_data['opex_per_original'] = self.opex_per_original(c_data)
+                c_data['cumulative_opex_per_original'] = c_data['opex_per_original'].cumsum()
                 c_data['ltv_per_original'] = self.ltv_per_original(c_data)
+                c_data['cumulative_ltv_per_original'] = c_data['ltv_per_original'].cumsum()
                 c_data['cm%_per_original'] = self.credit_margin_percent(c_data)
 
                 # add the forecasted data for the cohort to a list, aggregating all cohort forecasts
