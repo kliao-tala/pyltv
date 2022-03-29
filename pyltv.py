@@ -42,7 +42,7 @@ class Model:
     """
 
     def __init__(self, data, market='ke', fcast_method='powerslope', alpha=1, beta=1,
-                 dollar_ex=0.00925, eps=1e-50, default_scaling=None):
+                 dollar_ex=108, eps=1e-50, default_scaling=None):
         """
         Sets model attributes, loads additional data required for models (inputs &
         ltv_expected), and cleans data.
@@ -119,6 +119,7 @@ class Model:
         """
         self.inputs = pd.read_csv('data/ltv_inputs.csv').set_index('market')
         self.ltv_expected = pd.read_csv('data/ltv_expected.csv')
+        self.ltv_expected.index = np.arange(1, len(self.ltv_expected)+1)
 
     def clean_data(self):
         """
@@ -219,7 +220,7 @@ class Model:
         """
         df = cohort_data['Total Amount'] / cohort_data['Count Loans']
         if to_usd:
-            df *= self.dollar_ex
+            df /= self.dollar_ex
         return df
 
     def interest_rate(self, cohort_data):
@@ -240,7 +241,7 @@ class Model:
         """
         return cohort_data['Total Interest Assessed'] / cohort_data['Total Amount']
 
-    def default_rate(self, cohort_data, dpd=7, default_scaling=None):
+    def default_rate(self, cohort_data, dpd=7):
         """
         Computes the default rate for a specified days past due (dpd). The 7dpd
         default rate is taken as is from the raw LTV data and null values are
@@ -264,10 +265,7 @@ class Model:
             The average default rate at the specified dpd.
         """
         if dpd == 7:
-            if default_scaling:
-                return cohort_data['Default Rate Amount 7D'] * default_scaling
-            else:
-                return cohort_data['Default Rate Amount 7D']
+            return cohort_data['Default Rate Amount 7D']
 
         elif dpd == 51:
             default_rate = cohort_data['Default Rate Amount 51D']
@@ -284,7 +282,7 @@ class Model:
 
         elif dpd == 365:
             # get actual data if it exists
-            default_rate = np.nan * cohort_data['Default Rate Amount 51D']
+            default_rate = cohort_data['Default Rate Amount 365D']
 
             recovery_rate_365 = float(self.inputs.loc['ke', 'recovery_51_'])
 
@@ -316,13 +314,11 @@ class Model:
         """
         return cohort_data['Count Loans'] / cohort_data['Count Borrowers'].max()
 
-    def origination_per_original(self, cohort_data, to_usd):
-        df = cohort_data['Total Amount'] / cohort_data['Count Borrowers'].max()
-        if to_usd:
-            df *= self.dollar_ex
+    def origination_per_original(self, cohort_data):
+        df = cohort_data['loans_per_original'] * cohort_data['loan_size']
         return df
 
-    def revenue_per_original(self, cohort_data, to_usd):
+    def revenue_per_original(self, cohort_data):
         interest_revenue = cohort_data['origination_per_original'] * cohort_data['interest_rate']
 
         # 0.08 is the % fee we charge to defaulted customers
@@ -358,8 +354,8 @@ class Model:
 
         # for each cohort
         for cohort in self.data.loc[:, 'First Loan Local Disbursement Month'].unique():
-            # omit the last two months of incomplete data
-            cohort_data = self.data[self.data['First Loan Local Disbursement Month'] == cohort].iloc[:-1, :]
+            # omit the last month of incomplete data
+            cohort_data = self.data[self.data['First Loan Local Disbursement Month'] == cohort].iloc[:-2, :]
 
             # call data functions to generate calculated features
             cohort_data['borrower_retention'] = self.borrower_retention(cohort_data)
@@ -372,9 +368,9 @@ class Model:
             cohort_data['default_rate_365dpd'] = self.default_rate(cohort_data, dpd=365)
             cohort_data['loans_per_original'] = self.loans_per_original(cohort_data)
             cohort_data['cumulative_loans_per_original'] = cohort_data['loans_per_original'].cumsum()
-            cohort_data['origination_per_original'] = self.origination_per_original(cohort_data, to_usd)
+            cohort_data['origination_per_original'] = self.origination_per_original(cohort_data)
             cohort_data['cumulative_origination_per_original'] = cohort_data['origination_per_original'].cumsum()
-            cohort_data['revenue_per_original'] = self.revenue_per_original(cohort_data, to_usd)
+            cohort_data['revenue_per_original'] = self.revenue_per_original(cohort_data)
             cohort_data['cumulative_revenue_per_original'] = cohort_data['revenue_per_original'].cumsum()
             cohort_data['cm$_per_original'] = self.credit_margin(cohort_data)
             cohort_data['cumulative_cm$_per_original'] = cohort_data['cm$_per_original'].cumsum()
@@ -384,8 +380,9 @@ class Model:
             cohort_data['cumulative_ltv_per_original'] = cohort_data['ltv_per_original'].cumsum()
             cohort_data['cm%_per_original'] = self.credit_margin_percent(cohort_data)
 
-            # reset the index and append the data
-            cohorts.append(cohort_data.reset_index(drop=True))
+            # reset the index starting at 1, then append the data
+            cohort_data.index = np.arange(1, len(cohort_data)+1)
+            cohorts.append(cohort_data)
 
         self.cohorts = cohorts
         self.data = pd.concat(cohorts, axis=0)
@@ -506,15 +503,41 @@ class Model:
         forecast_dfs = []
 
         # range of desired time periods
-        times = list(range(1, n_months + 1))
+        times = np.arange(1, n_months+1)
         times_dict = {i: i for i in times}
+
+        # --- DEFAULT RATE FACTORS --- #
+        # compute the default rate std dev across cohorts for the first 12 months
+        default_std = data[['cohort', 'default_rate_7dpd']].copy()
+        default_std = default_std.set_index('cohort', append=True).unstack(-2).iloc[:, :12]
+        default_std = default_std.std()
+        default_std.index = np.arange(1, len(default_std) + 1)
+
+        def func(t, A, B):
+            return A * (t ** B)
+
+        params, covs = curve_fit(func, default_std.index, default_std)
+
+        default_std_fit = func(times, params[0], params[1])
+        default_std_fit = pd.Series(default_std_fit, index=times)
+
+        default_expected = self.ltv_expected['default_rate_7dpd']
+
+        default_factors = []
+        for c in data.cohort.unique():
+            c_data = data[data.cohort==c]['default_rate_7dpd']
+
+            default_factors.append(np.mean((c_data - default_expected[:len(c_data)])/default_std_fit[:len(c_data)]))
+        default_factors = pd.Series(default_factors, index=data.cohort.unique())
+        # -------------------------------#
 
         for cohort in data.cohort.unique():
             # data for current cohort
             c_data = data[data.cohort == cohort].copy()
 
             # starting cohort size
-            n = c_data.loc[0, 'Count Borrowers']
+            n = c_data.loc[1, 'Count Borrowers']
+            n_valid = len(c_data)
 
             # only for cohorts with at least 4 data points
             if len(c_data) >= min_months:
@@ -543,22 +566,12 @@ class Model:
                     def power_fcast(c_data, param='borrower_retention'):
 
                         c = c_data[param].dropna()
-                        c.index = np.arange(1, len(c) + 1)
 
                         def power_fit(times, a, b):
-                            y = []
-                            for t in times:
-                                if t == 0:
-                                    y.append(1)
-                                else:
-                                    y.append(a * t ** b)
-                            return np.array(y)
+                            return a * np.array(times)**b
 
                         # fit actuals and extract a & b params
                         popt, pcov = curve_fit(power_fit, c.index, c)
-
-                        # generate the full range of times to forecast over
-                        times = np.arange(1, n_months + 2)
 
                         a = popt[0]
                         b = popt[1]
@@ -571,33 +584,38 @@ class Model:
                         max_survival = self.inputs.loc['ke', 'max_monthly_borrower_retention']
 
                         # take the slope of the power fit between the current and previous time periods
-                        power_slope = power_fit(times, a=a, b=b) / power_fit(times - 1, a=a, b=b)
+                        # errstate handles division by 0 errors
+                        with np.errstate(divide='ignore'):
+                            shifted_fit = power_fit(times-1, a, b)
+                            shifted_fit[np.isinf(shifted_fit)] = 1
+                        power_slope = power_fit(times, a, b) / shifted_fit
 
                         # apply max survival condition
-                        power_slope_capped = np.array([i if i < max_survival else max_survival for i in power_slope])
+                        power_slope[power_slope > max_survival] = max_survival
                         # only need values for times we're going to forecast for.
-                        power_slope_capped = power_slope_capped[len(c):]
-                        power_slope_capped = pd.Series(power_slope_capped, index=[t for t in times[len(c):]])
+                        power_slope = power_slope[len(c):]
+                        power_slope = pd.Series(power_slope, index=[t for t in times[len(c):]])
 
                         c_fcast = c.copy()
                         for t in times[len(c):]:
-                            c_fcast.loc[t] = c_fcast[t - 1] * power_slope_capped[t]
+                            c_fcast.loc[t] = c_fcast[t - 1] * power_slope[t]
 
-                        return c_fcast.reset_index(drop=True)
+                        return c_fcast
 
                     forecast = power_fcast(c_data)
+                    forecast.index = np.arange(1, len(c_data)+1)
                     # fill in the forecasted data
                     c_data['borrower_retention'] = c_data['borrower_retention'].fillna(forecast)
 
                     # compute Count Borrowers
                     fcast_count = []
-                    for t in forecast.index:
+                    for t in times:
                         if t < len(c_data['Count Borrowers'].dropna()):
                             fcast_count.append(c_data.loc[t, 'Count Borrowers'])
                         else:
-                            fcast_count.append(c_data.loc[0, 'Count Borrowers'] * forecast[t])
+                            fcast_count.append(n * forecast[t])
 
-                    c_data['Count Borrowers'] = pd.Series(fcast_count)
+                    c_data['Count Borrowers'] = pd.Series(fcast_count, index=times)
 
                 elif self.method == 'sbg':
                     c = c_data['Count Borrowers'].dropna()
@@ -692,9 +710,7 @@ class Model:
                     # add retention
                     c_data['borrower_retention'] = self.borrower_retention(c_data)
 
-
                 # --- ALL OTHERS --- #
-
                 # compute survival
                 c_data['borrower_survival'] = self.borrower_survival(c_data)
 
@@ -716,7 +732,7 @@ class Model:
 
                 # forecast Total Amount
                 c_data['Total Amount'] = c_data['Total Amount'].fillna(
-                    (c_data['loan_size'] / self.dollar_ex) * c_data['Count Loans'])
+                    (c_data['loan_size'] * self.dollar_ex) * c_data['Count Loans'])
 
                 # forecast Interest Rate
                 for i in c_data[c_data.interest_rate.isnull()].index:
@@ -725,19 +741,31 @@ class Model:
                                                          i - 1, 'interest_rate']
 
                 # forecast default rate 7dpd
-                default = c_data.default_rate_7dpd.dropna()
-                default.index = np.arange(1, len(default) + 1)
+                def power_fit1():
+                    default = c_data.default_rate_7dpd.dropna()
 
-                def func(t, A, B):
-                    return A * (t ** B)
+                    def func(t, A, B):
+                        return A * (t ** B)
 
-                params, covs = curve_fit(func, default.index, default)
+                    params, covs = curve_fit(func, default.index, default)
 
-                t = list(range(1, n_months + 2))
-                fit = func(t, params[0], params[1])
-                fit = pd.Series(fit, index=t).reset_index(drop=True)
+                    t = list(range(1, n_months + 2))
+                    fit = func(t, params[0], params[1])
+                    fit = pd.Series(fit, index=t).reset_index(drop=True)
 
-                c_data['default_rate_7dpd'] = c_data['default_rate_7dpd'].fillna(fit)
+                    return c_data['default_rate_7dpd'].fillna(fit)
+
+                #c_data['default_rate_7dpd'] = power_fit1()
+                default_fcast = []
+                for t in times:
+                    if t < n_valid+1:
+                        default_fcast.append(c_data.loc[t, 'default_rate_7dpd'])
+                    else:
+                        default_fcast.append(default_expected[t] + default_factors[cohort]*default_std_fit[t])
+                default_fcast = pd.Series(default_fcast, index=times)
+
+                c_data['default_rate_7dpd'] = default_fcast
+
 
                 # derive 51dpd and 365 dpd from 7dpd
                 c_data['default_rate_51dpd'] = self.default_rate(c_data, dpd=51)
@@ -750,9 +778,9 @@ class Model:
                 # compute remaining columns from forecasts
                 c_data['loans_per_original'] = self.loans_per_original(c_data)
                 c_data['cumulative_loans_per_original'] = c_data['loans_per_original'].cumsum()
-                c_data['origination_per_original'] = self.origination_per_original(c_data, to_usd)
+                c_data['origination_per_original'] = self.origination_per_original(c_data)
                 c_data['cumulative_origination_per_original'] = c_data['origination_per_original'].cumsum()
-                c_data['revenue_per_original'] = self.revenue_per_original(c_data, to_usd)
+                c_data['revenue_per_original'] = self.revenue_per_original(c_data)
                 c_data['cumulative_revenue_per_original'] = c_data['revenue_per_original'].cumsum()
                 c_data['cm$_per_original'] = self.credit_margin(c_data)
                 c_data['cumulative_cm$_per_original'] = c_data['cm$_per_original'].cumsum()
@@ -766,6 +794,8 @@ class Model:
                 forecast_dfs.append(c_data)
 
         return pd.concat(forecast_dfs)
+
+
 
     def backtest_data(self, data, months=4, metrics = ['rmse', 'me', 'mape', 'mpe']):
         """
