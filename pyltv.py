@@ -268,28 +268,21 @@ class Model:
             return cohort_data['Default Rate Amount 7D']
 
         elif dpd == 51:
-            default_rate = cohort_data['Default Rate Amount 51D']
+            default_rate = cohort_data['Default Rate Amount 51D'].copy()
 
-            recovery_rate_51 = float(self.inputs.loc['ke', 'recovery_7-30'] + \
-                                     self.inputs.loc['ke', 'recovery_30-51'])
+            recovery_rate_51 = float(self.inputs.loc['ke', 'recovery_30-51'])
 
-            # fill null 51dpd values with 7dpd values based on recovery rates
-            derived_51dpd = (cohort_data['Count Loans'] * (cohort_data['default_rate_7dpd']) -
-                             cohort_data['Count Loans'] * (cohort_data['default_rate_7dpd']) * recovery_rate_51) / \
-                            cohort_data['Count Loans']
+            derived_51dpd = cohort_data['Default Rate Amount 30D']*(1-recovery_rate_51)
 
             return default_rate.fillna(derived_51dpd)
 
         elif dpd == 365:
             # get actual data if it exists
-            default_rate = cohort_data['Default Rate Amount 365D']
+            default_rate = np.nan * cohort_data['Default Rate Amount 51D'].copy()
 
             recovery_rate_365 = float(self.inputs.loc['ke', 'recovery_51_'])
 
-            # fill null 365dpd values with 51dpd values based on recovery rates
-            derived_365dpd = (cohort_data['Count Loans'] * (cohort_data['default_rate_51dpd']) -
-                              cohort_data['Count Loans'] * (cohort_data['default_rate_51dpd']) *
-                              recovery_rate_365) / cohort_data['Count Loans']
+            derived_365dpd = cohort_data['default_rate_51dpd']*(1-recovery_rate_365)
 
             return default_rate.fillna(derived_365dpd)
 
@@ -343,6 +336,9 @@ class Model:
     def ltv_per_original(self, cohort_data):
         return cohort_data['cm$_per_original'] - cohort_data['opex_per_original']
 
+    def dcf_ltv_per_original(self, cohort_data):
+        return cohort_data['ltv_per_original']/(1+0.01*cohort_data['ltv_per_original'].index)
+
     def credit_margin_percent(self, cohort_data):
         return cohort_data['ltv_per_original'] / cohort_data['revenue_per_original']
 
@@ -355,7 +351,8 @@ class Model:
         # for each cohort
         for cohort in self.data.loc[:, 'First Loan Local Disbursement Month'].unique():
             # omit the last month of incomplete data
-            cohort_data = self.data[self.data['First Loan Local Disbursement Month'] == cohort].iloc[:-2, :]
+            cohort_data = self.data[self.data['First Loan Local Disbursement Month'] == cohort].iloc[:-4, :]
+            cohort_data.index = np.arange(1, len(cohort_data)+1)
 
             # call data functions to generate calculated features
             cohort_data['borrower_retention'] = self.borrower_retention(cohort_data)
@@ -378,10 +375,11 @@ class Model:
             cohort_data['cumulative_opex_per_original'] = cohort_data['opex_per_original'].cumsum()
             cohort_data['ltv_per_original'] = self.ltv_per_original(cohort_data)
             cohort_data['cumulative_ltv_per_original'] = cohort_data['ltv_per_original'].cumsum()
+            cohort_data['dcf_ltv_per_original'] = self.dcf_ltv_per_original(cohort_data)
+            cohort_data['cumulative_dcf_ltv_per_original'] = cohort_data['dcf_ltv_per_original'].cumsum()
             cohort_data['cm%_per_original'] = self.credit_margin_percent(cohort_data)
 
-            # reset the index starting at 1, then append the data
-            cohort_data.index = np.arange(1, len(cohort_data)+1)
+            # append the data
             cohorts.append(cohort_data)
 
         self.cohorts = cohorts
@@ -521,13 +519,15 @@ class Model:
         default_std_fit = func(times, params[0], params[1])
         default_std_fit = pd.Series(default_std_fit, index=times)
 
-        default_expected = self.ltv_expected['default_rate_7dpd']
+        default_expected_7 = self.ltv_expected['default_rate_7dpd']
+        default_expected_51 = self.ltv_expected['default_rate_51dpd']
+        default_expected_365 = self.ltv_expected['default_rate_365dpd']
 
         default_factors = []
         for c in data.cohort.unique():
             c_data = data[data.cohort==c]['default_rate_7dpd']
 
-            default_factors.append(np.mean((c_data - default_expected[:len(c_data)])/default_std_fit[:len(c_data)]))
+            default_factors.append(np.mean((c_data - default_expected_7[:len(c_data)])/default_std_fit[:len(c_data)]))
         default_factors = pd.Series(default_factors, index=data.cohort.unique())
         # -------------------------------#
 
@@ -756,20 +756,39 @@ class Model:
                     return c_data['default_rate_7dpd'].fillna(fit)
 
                 #c_data['default_rate_7dpd'] = power_fit1()
+
+                # 7DPD
                 default_fcast = []
                 for t in times:
                     if t < n_valid+1:
                         default_fcast.append(c_data.loc[t, 'default_rate_7dpd'])
                     else:
-                        default_fcast.append(default_expected[t] + default_factors[cohort]*default_std_fit[t])
+                        default_fcast.append(default_expected_7[t] + default_factors[cohort]*default_std_fit[t])
                 default_fcast = pd.Series(default_fcast, index=times)
 
                 c_data['default_rate_7dpd'] = default_fcast
 
+                # 51DPD
+                default_fcast = []
+                for t in times:
+                    if t < n_valid + 1:
+                        default_fcast.append(c_data.loc[t, 'default_rate_51dpd'])
+                    else:
+                        default_fcast.append(default_expected_51[t] + default_factors[cohort] * default_std_fit[t])
+                default_fcast = pd.Series(default_fcast, index=times)
 
-                # derive 51dpd and 365 dpd from 7dpd
-                c_data['default_rate_51dpd'] = self.default_rate(c_data, dpd=51)
-                c_data['default_rate_365dpd'] = self.default_rate(c_data, dpd=365)
+                c_data['default_rate_51dpd'] = default_fcast
+
+                # 365DPD
+                default_fcast = []
+                for t in times:
+                    if t < n_valid + 1:
+                        default_fcast.append(c_data.loc[t, 'default_rate_365dpd'])
+                    else:
+                        default_fcast.append(default_expected_365[t] + default_factors[cohort] * default_std_fit[t])
+                default_fcast = pd.Series(default_fcast, index=times)
+
+                c_data['default_rate_365dpd'] = default_fcast
 
                 if self.default_scaling:
                     c_data['default_rate_7dpd'] = self.default_scaling * c_data['default_rate_7dpd']
@@ -788,6 +807,8 @@ class Model:
                 c_data['cumulative_opex_per_original'] = c_data['opex_per_original'].cumsum()
                 c_data['ltv_per_original'] = self.ltv_per_original(c_data)
                 c_data['cumulative_ltv_per_original'] = c_data['ltv_per_original'].cumsum()
+                c_data['dcf_ltv_per_original'] = self.dcf_ltv_per_original(c_data)
+                c_data['cumulative_dcf_ltv_per_original'] = c_data['dcf_ltv_per_original'].cumsum()
                 c_data['cm%_per_original'] = self.credit_margin_percent(c_data)
 
                 # add the forecasted data for the cohort to a list, aggregating all cohort forecasts
