@@ -42,7 +42,7 @@ class Model:
     """
 
     def __init__(self, data, market='ke', fcast_method='powerslope', alpha=1, beta=1,
-                 dollar_ex=108, eps=1e-50, default_stress=None):
+                 eps=1e-50, default_stress=None):
         """
         Sets model attributes, loads additional data required for models (inputs &
         ltv_expected), and cleans data.
@@ -72,7 +72,7 @@ class Model:
             Value to initialize beta. beta is later optimized by minimizing the
             loglikelihood function.
 
-        dollar_ex : float
+        fx : float
             Dollar currency conversion rate. Used to convert from data's local currency
             to USD.
 
@@ -86,7 +86,13 @@ class Model:
         self.method = fcast_method
         self.alpha = alpha
         self.beta = beta
-        self.dollar_ex = dollar_ex
+        if market=='ke':
+            fx = 108
+        elif market=='ph':
+            fx = 51
+        elif market=='mx':
+            fx = 20
+        self.fx = fx
         self.eps = eps
         self.default_stress = default_stress
         self.forecast_cols = ['Count Borrowers', 'borrower_retention', 'borrower_survival', 'loan_size',
@@ -118,7 +124,7 @@ class Model:
         models. ltv_expected.csv contains the historical LTV data.
         """
         self.inputs = pd.read_csv('data/ltv_inputs.csv').set_index('market')
-        self.ltv_expected = pd.read_csv('data/ltv_expected.csv')
+        self.ltv_expected = pd.read_csv(f'data/{self.market}_ltv_expected.csv')
         self.ltv_expected.index = np.arange(1, len(self.ltv_expected)+1)
 
     def clean_data(self):
@@ -131,6 +137,9 @@ class Model:
                 year, month = date.split('-')
                 month = '0' + month
                 self.data = self.data.replace({date: year + '-' + month})
+
+        # drop any negative months since first loan
+        self.data = self.data[~self.data['Months Since First Loan Disbursed'] < 0]
 
         # sort by months since first disbursement
         self.data = self.data.sort_values(['First Loan Local Disbursement Month',
@@ -210,7 +219,7 @@ class Model:
 
         to_usd : bool
             If True, converts local currency to USD using the exchange rate
-            set by self.dollar_ex. If false, the local currency is not converted
+            set by self.fx. If false, the local currency is not converted
             to USD.
 
         Returns
@@ -220,7 +229,7 @@ class Model:
         """
         df = cohort_data['Total Amount'] / cohort_data['Count Loans']
         if to_usd:
-            df /= self.dollar_ex
+            df /= self.fx
         return df
 
     def interest_rate(self, cohort_data):
@@ -270,7 +279,7 @@ class Model:
         elif dpd == 51:
             default_rate = cohort_data['Default Rate Amount 51D'].copy()
 
-            recovery_rate_51 = float(self.inputs.loc['ke', 'recovery_30-51'])
+            recovery_rate_51 = float(self.inputs.loc[self.market, 'recovery_30-51'])
 
             derived_51dpd = cohort_data['Default Rate Amount 30D']*(1-recovery_rate_51)
 
@@ -280,7 +289,7 @@ class Model:
             # get actual data if it exists
             default_rate = np.nan * cohort_data['Default Rate Amount 51D'].copy()
 
-            recovery_rate_365 = float(self.inputs.loc['ke', 'recovery_51_'])
+            recovery_rate_365 = float(self.inputs.loc[self.market, 'recovery_51_'])
 
             derived_365dpd = cohort_data['default_rate_51dpd']*(1-recovery_rate_365)
 
@@ -732,7 +741,7 @@ class Model:
 
                 # forecast Total Amount
                 c_data['Total Amount'] = c_data['Total Amount'].fillna(
-                    (c_data['loan_size'] * self.dollar_ex) * c_data['Count Loans'])
+                    (c_data['loan_size'] * self.fx) * c_data['Count Loans'])
 
                 # forecast Interest Rate
                 for i in c_data[c_data.interest_rate.isnull()].index:
