@@ -42,7 +42,7 @@ class Model:
     """
 
     def __init__(self, data, market='ke', fcast_method='powerslope', alpha=1, beta=1,
-                 dollar_ex=108, eps=1e-50, default_scaling=None):
+                 dollar_ex=108, eps=1e-50, default_stress=None):
         """
         Sets model attributes, loads additional data required for models (inputs &
         ltv_expected), and cleans data.
@@ -88,7 +88,7 @@ class Model:
         self.beta = beta
         self.dollar_ex = dollar_ex
         self.eps = eps
-        self.default_scaling = default_scaling
+        self.default_stress = default_stress
         self.forecast_cols = ['Count Borrowers', 'borrower_retention', 'borrower_survival', 'loan_size',
                               'loans_per_borrower', 'Count Loans', 'Total Amount', 'interest_rate',
                               'default_rate_7dpd', 'default_rate_51dpd', 'default_rate_365dpd',
@@ -790,9 +790,9 @@ class Model:
 
                 c_data['default_rate_365dpd'] = default_fcast
 
-                if self.default_scaling:
-                    c_data['default_rate_7dpd'] = self.default_scaling * c_data['default_rate_7dpd']
-                    c_data['default_rate_365dpd'] = self.default_scaling * c_data['default_rate_365dpd']
+                if self.default_stress:
+                    c_data['default_rate_7dpd'] += self.default_stress
+                    c_data['default_rate_365dpd'] += self.default_stress
 
                 # compute remaining columns from forecasts
                 c_data['loans_per_original'] = self.loans_per_original(c_data)
@@ -815,8 +815,6 @@ class Model:
                 forecast_dfs.append(c_data)
 
         return pd.concat(forecast_dfs)
-
-
 
     def backtest_data(self, data, months=4, metrics = ['rmse', 'me', 'mape', 'mpe']):
         """
