@@ -336,8 +336,8 @@ class Model:
                cohort_data['default_rate_365dpd']
 
     def opex_per_original(self, cohort_data):
-        opex_cost_per_loan = float(self.inputs.loc['ke', 'opex cost per loan'])
-        cost_of_capital = float(self.inputs.loc['ke', 'cost of capital']) / 12
+        opex_cost_per_loan = float(self.inputs.loc[self.market, 'opex cost per loan'])
+        cost_of_capital = float(self.inputs.loc[self.market, 'cost of capital']) / 12
 
         return opex_cost_per_loan * cohort_data['loans_per_original'] + \
                cost_of_capital * cohort_data['origination_per_original']
@@ -590,7 +590,7 @@ class Model:
                             b = b + .2 * (6 - len(c) - 1)
 
                         # get max survival from inputs
-                        max_survival = self.inputs.loc['ke', 'max_monthly_borrower_retention']
+                        max_survival = self.inputs.loc[self.market, 'max_monthly_borrower_retention']
 
                         # take the slope of the power fit between the current and previous time periods
                         # errstate handles division by 0 errors
@@ -669,7 +669,7 @@ class Model:
                     survival_forecast = count_forecast/count_forecast.shift(1)
 
                     # get max survival from inputs
-                    max_survival = self.inputs.loc['ke', 'max_monthly_borrower_retention'].astype(float)
+                    max_survival = self.inputs.loc[self.market, 'max_monthly_borrower_retention'].astype(float)
 
                     # cap survival at max from inputs
                     survival_forecast = survival_forecast['Count Borrowers'].apply(lambda x: \
@@ -704,7 +704,7 @@ class Model:
                     survival_forecast = 0.98 * count_forecast/count_forecast.shift(1)
 
                     # get max survival from inputs
-                    max_survival = self.inputs.loc['ke', 'max_monthly_borrower_retention'].astype(float)
+                    max_survival = self.inputs.loc[self.market, 'max_monthly_borrower_retention'].astype(float)
 
                     # cap survival at max from inputs
                     survival_forecast = survival_forecast['Count Borrowers'].apply(lambda x: \
