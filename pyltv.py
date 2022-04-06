@@ -53,7 +53,8 @@ class Model:
         Computes borrower retention.
     """
 
-    def __init__(self, data, market='ke', fcast_method='powerslope', default_stress=None):
+    def __init__(self, data, market='ke', fcast_method='powerslope', default_stress=None,
+                 retention_effect=False, convenient=True):
         """
         Sets model attributes, loads additional data required for models (inputs &
         ltv_expected), and cleans data.
@@ -86,6 +87,7 @@ class Model:
         self.fx = forex[market]
         self.eps = epsilon
         self.default_stress = default_stress
+        self.retention_effect = retention_effect
         self.forecast_cols = ['Count Borrowers', 'borrower_retention', 'borrower_survival', 'loan_size',
                               'loans_per_borrower', 'Count Loans', 'Total Amount', 'interest_rate',
                               'default_rate_7dpd', 'default_rate_51dpd', 'default_rate_365dpd',
@@ -99,7 +101,9 @@ class Model:
 
         # load data that the models depend on and clean LTV data from Looker
         self.load_dependent_data()
-        self.clean_data()
+        if convenient:
+            self.clean_data()
+            self.generate_features()
 
         # print the date range that the data spans
         min_date = str(pd.to_datetime(self.data.cohort).min())[:7]
@@ -142,6 +146,15 @@ class Model:
         # add more convenient cohort label column
         self.data['cohort'] = self.data['First Loan Local Disbursement Month']
 
+        # remove the last two months of data for each cohort
+        cohort_data = []
+        for c in self.data.cohort.unique():
+            c_data = self.data[self.data.cohort == c]
+
+            cohort_data.append(c_data.iloc[:-2])
+
+        self.data = pd.concat(cohort_data, axis=0)
+
     # --- DATA FUNCTIONS --- #
     def borrower_retention(self, cohort_data):
         """
@@ -158,7 +171,17 @@ class Model:
         borrower_retention : pandas Series
             Retention rate for each time period for the given cohort.
         """
-        return cohort_data['Count Borrowers'] / cohort_data['Count Borrowers'].max()
+        if self.retention_effect:
+            lost_to_default = self.default_stress * cohort_data['Count Borrowers'].shift(1)
+            # print(lost_to_default)
+            lost_to_default.iloc[0] = 0
+
+            adjusted_retention = (cohort_data['Count Borrowers'] - lost_to_default) / \
+                                 cohort_data['Count Borrowers'].max()
+
+            return adjusted_retention
+        else:
+            return cohort_data['Count Borrowers'] / cohort_data['Count Borrowers'].max()
 
     def borrower_survival(self, cohort_data):
         """
@@ -351,7 +374,7 @@ class Model:
         # for each cohort
         for cohort in self.data.loc[:, 'First Loan Local Disbursement Month'].unique():
             # omit the last month of incomplete data
-            cohort_data = self.data[self.data['First Loan Local Disbursement Month'] == cohort].iloc[:-4, :]
+            cohort_data = self.data[self.data['First Loan Local Disbursement Month'] == cohort].copy()
             cohort_data.index = np.arange(1, len(cohort_data)+1)
 
             # call data functions to generate calculated features
