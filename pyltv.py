@@ -16,6 +16,15 @@ import plotly.io as pio
 pio.templates.default = "plotly_white"
 
 
+# --- MODEL PARAMETERS --- #
+# exchange rates
+forex = {'ke': 108, 'ph': 51, 'mx': 20}
+# epsilon to avoid division by 0
+epsilon = 1e-50
+# initial values for alpha & beta in sbg model.
+alpha = beta = 1
+
+
 # --- MODEL --- #
 class Model:
     """Data Modeling Class
@@ -27,6 +36,9 @@ class Model:
     ----------
     data : pandas DataFrame
         Raw data pulled from Looker.
+    market : str
+        Market that the data corresponds to.
+    fcast_method
 
     Methods
     -------
@@ -41,8 +53,7 @@ class Model:
         Computes borrower retention.
     """
 
-    def __init__(self, data, market='ke', fcast_method='powerslope', alpha=1, beta=1,
-                 eps=1e-50, default_stress=None):
+    def __init__(self, data, market='ke', fcast_method='powerslope', default_stress=None):
         """
         Sets model attributes, loads additional data required for models (inputs &
         ltv_expected), and cleans data.
@@ -63,37 +74,17 @@ class Model:
                 - sbg:
                 - sbg-slope:
                 - sbg-slope-scaled:
-
-        alpha : int
-            Value to initialize alpha. alpha is later optimized by minimizing the
-            loglikelihood function.
-
-        beta : int
-            Value to initialize beta. beta is later optimized by minimizing the
-            loglikelihood function.
-
-        fx : float
-            Dollar currency conversion rate. Used to convert from data's local currency
-            to USD.
-
-        eps : float
-            Epsilon is a small constant used to prevent errors in floating point
-            computations involving very small (close to 0) numbers, such as during
-            division or taking the natural logarithm.
+        default_stress : float [0, None]
+            Must be greater than 0. This is the stress to default rates and is an additive
+            term in the model. E.g. a 0.01 stress means a 5% default becomes 6%.
         """
         self.data = data
         self.market = market
         self.method = fcast_method
         self.alpha = alpha
         self.beta = beta
-        if market=='ke':
-            fx = 108
-        elif market=='ph':
-            fx = 51
-        elif market=='mx':
-            fx = 20
-        self.fx = fx
-        self.eps = eps
+        self.fx = forex[market]
+        self.eps = epsilon
         self.default_stress = default_stress
         self.forecast_cols = ['Count Borrowers', 'borrower_retention', 'borrower_survival', 'loan_size',
                               'loans_per_borrower', 'Count Loans', 'Total Amount', 'interest_rate',
@@ -116,7 +107,7 @@ class Model:
         n_months = self.data.cohort.nunique()
         print(f'Data spans {min_date} to {max_date}')
         print(f'Total # of cohorts: {n_months}')
-        print('...')
+        print('')
 
     def load_dependent_data(self):
         """
