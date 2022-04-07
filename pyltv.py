@@ -151,7 +151,7 @@ class Model:
         for c in self.data.cohort.unique():
             c_data = self.data[self.data.cohort == c]
 
-            cohort_data.append(c_data.iloc[:-2])
+            cohort_data.append(c_data.iloc[:-4])
 
         self.data = pd.concat(cohort_data, axis=0)
 
@@ -178,6 +178,9 @@ class Model:
 
             adjusted_retention = (cohort_data['Count Borrowers'] - lost_to_default) / \
                                  cohort_data['Count Borrowers'].max()
+
+            # Count Borrowers also needs to be adjusted
+            cohort_data['Count Borrowers'] = (int(cohort_data.loc[1, 'Count Borrowers'])*adjusted_retention).astype(int)
 
             return adjusted_retention
         else:
