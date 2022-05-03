@@ -23,6 +23,8 @@ forex = {'ke': 108, 'ph': 51, 'mx': 20}
 epsilon = 1e-50
 # initial values for alpha & beta in sbg model.
 alpha = beta = 1
+# discounted annual rate for discounted cash flow (DCF) framework
+dcf = 0.15
 
 
 # --- MODEL --- #
@@ -133,6 +135,20 @@ class Model:
                 month = '0' + month
                 self.data = self.data.replace({date: year + '-' + month})
 
+        # convert cols to appropriate datatypes
+        int_cols = ['Count First Loans',
+                    'Count Borrowers',
+                    'Count Loans',
+                    'Total Amount',
+                    'Total Interest Assessed',
+                    'Total Rollover Charged',
+                    'Total Rollover Reversed']
+        for col in int_cols:
+            try:
+                self.data[col] = pd.to_numeric(self.data[col].str.replace(',', ''))
+            except AttributeError:
+                self.data[col] = pd.to_numeric(self.data[col])
+
         # drop any negative months since first loan
         self.data = self.data[~self.data['Months Since First Loan Disbursed'] < 0]
 
@@ -151,7 +167,7 @@ class Model:
         for c in self.data.cohort.unique():
             c_data = self.data[self.data.cohort == c]
 
-            cohort_data.append(c_data.iloc[:-4])
+            cohort_data.append(c_data.iloc[:-2])
 
         self.data = pd.concat(cohort_data, axis=0)
 
@@ -171,20 +187,7 @@ class Model:
         borrower_retention : pandas Series
             Retention rate for each time period for the given cohort.
         """
-        if self.retention_effect:
-            lost_to_default = self.default_stress * cohort_data['Count Borrowers'].shift(1)
-            # print(lost_to_default)
-            lost_to_default.iloc[0] = 0
-
-            adjusted_retention = (cohort_data['Count Borrowers'] - lost_to_default) / \
-                                 cohort_data['Count Borrowers'].max()
-
-            # Count Borrowers also needs to be adjusted
-            cohort_data['Count Borrowers'] = (int(cohort_data.loc[1, 'Count Borrowers'])*adjusted_retention).astype(int)
-
-            return adjusted_retention
-        else:
-            return cohort_data['Count Borrowers'] / cohort_data['Count Borrowers'].max()
+        return cohort_data['Count Borrowers'] / cohort_data['Count Borrowers'].max()
 
     def borrower_survival(self, cohort_data):
         """
@@ -359,11 +362,21 @@ class Model:
         return opex_cost_per_loan * cohort_data['loans_per_original'] + \
                cost_of_capital * cohort_data['origination_per_original']
 
+    def opex_coc_per_original(self, cohort_data):
+        cost_of_capital = float(self.inputs.loc[self.market, 'cost of capital']) / 12
+
+        return cost_of_capital * cohort_data['origination_per_original']
+
+    def opex_cpl_per_original(self, cohort_data):
+        opex_cost_per_loan = float(self.inputs.loc[self.market, 'opex cost per loan'])
+
+        return opex_cost_per_loan * cohort_data['loans_per_original']
+
     def ltv_per_original(self, cohort_data):
         return cohort_data['cm$_per_original'] - cohort_data['opex_per_original']
 
     def dcf_ltv_per_original(self, cohort_data):
-        return cohort_data['ltv_per_original']/(1+0.01*cohort_data['ltv_per_original'].index)
+        return cohort_data['ltv_per_original']/(1+(dcf/12)*cohort_data['ltv_per_original'].index)
 
     def credit_margin_percent(self, cohort_data):
         return cohort_data['ltv_per_original'] / cohort_data['revenue_per_original']
@@ -380,12 +393,54 @@ class Model:
             cohort_data = self.data[self.data['First Loan Local Disbursement Month'] == cohort].copy()
             cohort_data.index = np.arange(1, len(cohort_data)+1)
 
-            # call data functions to generate calculated features
-            cohort_data['borrower_retention'] = self.borrower_retention(cohort_data)
-            cohort_data['borrower_survival'] = self.borrower_survival(cohort_data)
             cohort_data['loans_per_borrower'] = self.loans_per_borrower(cohort_data)
             cohort_data['loan_size'] = self.loan_size(cohort_data, to_usd)
             cohort_data['interest_rate'] = self.interest_rate(cohort_data)
+
+            # call data functions to generate calculated features
+            if self.retention_effect:
+                # adjust Count Loans & Count Borrowers
+                new_loan_count = {}
+                new_borrower_count = {}
+                new_total_amount = {}
+                new_interest_assessed = {}
+                lost_loan_sum = 0
+                lost_borrower_sum = 0
+                lost_amount_sum = 0
+                lost_interest_sum = 0
+                for t in cohort_data.index:
+                    if t == 1:
+                        new_loan_count[t] = cohort_data.loc[t, 'Count Loans']
+                        new_borrower_count[t] = cohort_data.loc[t, 'Count Borrowers']
+                        new_total_amount[t] = cohort_data.loc[t, 'Total Amount']
+                        new_interest_assessed[t] = cohort_data.loc[t, 'Total Interest Assessed']
+                    else:
+                        # the number of lost borrowers is simply equal to the number of defaulted loans
+                        borrowers_defaulted_from_stress = self.default_stress * new_loan_count[t - 1]
+
+                        lost_borrower_sum += borrowers_defaulted_from_stress
+                        new_borrower_count[t] = cohort_data.loc[t, 'Count Borrowers'] - lost_borrower_sum
+
+                        new_loan_count[t] = cohort_data.loc[t, 'Count Loans'] - \
+                                            lost_borrower_sum * cohort_data.loc[t, 'loans_per_borrower']
+
+                        new_total_amount[t] = cohort_data.loc[t, 'Total Amount'] - \
+                                              lost_borrower_sum * cohort_data.loc[t, 'loans_per_borrower'] * \
+                                              cohort_data.loc[t, 'loan_size'] * self.fx
+
+                        new_interest_assessed[t] = cohort_data.loc[t, 'Total Interest Assessed'] - \
+                                                   lost_borrower_sum * cohort_data.loc[t, 'loans_per_borrower'] * \
+                                                   cohort_data.loc[t, 'interest_rate'] * \
+                                                   cohort_data.loc[t, 'loan_size'] * self.fx
+
+                # need the round because astype floors to the lowest int
+                cohort_data['Count Loans'] = pd.Series(new_loan_count).round(0).astype(int)
+                cohort_data['Count Borrowers'] = pd.Series(new_borrower_count).round(0).astype(int)
+                cohort_data['Total Amount'] = pd.Series(new_total_amount).round(0).astype(int)
+                cohort_data['Total Interest Assessed'] = pd.Series(new_interest_assessed).round(0).astype(int)
+
+            cohort_data['borrower_retention'] = self.borrower_retention(cohort_data)
+            cohort_data['borrower_survival'] = self.borrower_survival(cohort_data)
             cohort_data['default_rate_7dpd'] = self.default_rate(cohort_data, dpd=7)
             cohort_data['default_rate_51dpd'] = self.default_rate(cohort_data, dpd=51)
             cohort_data['default_rate_365dpd'] = self.default_rate(cohort_data, dpd=365)
@@ -399,6 +454,10 @@ class Model:
             cohort_data['cumulative_cm$_per_original'] = cohort_data['cm$_per_original'].cumsum()
             cohort_data['opex_per_original'] = self.opex_per_original(cohort_data)
             cohort_data['cumulative_opex_per_original'] = cohort_data['opex_per_original'].cumsum()
+            cohort_data['opex_coc_per_original'] = self.opex_coc_per_original(cohort_data)
+            cohort_data['cumulative_opex_coc_per_original'] = self.opex_coc_per_original(cohort_data).cumsum()
+            cohort_data['opex_cpl_per_original'] = self.opex_cpl_per_original(cohort_data)
+            cohort_data['cumulative_opex_cpl_per_original'] = self.opex_cpl_per_original(cohort_data).cumsum()
             cohort_data['ltv_per_original'] = self.ltv_per_original(cohort_data)
             cohort_data['cumulative_ltv_per_original'] = cohort_data['ltv_per_original'].cumsum()
             cohort_data['dcf_ltv_per_original'] = self.dcf_ltv_per_original(cohort_data)
@@ -411,7 +470,7 @@ class Model:
         self.cohorts = cohorts
         self.data = pd.concat(cohorts, axis=0)
 
-    def plot_cohorts(self, param, data='raw'):
+    def plot_cohorts(self, param, data='raw', show=False):
         """
         Generate scatter plot for a specific paramter.
 
@@ -473,7 +532,10 @@ class Model:
                               xaxis=dict(title='Month Since First Disbursement'),
                               yaxis=dict(title=param))
 
-            fig.show()
+            if show:
+                fig.show()
+
+            return fig
 
         elif data == 'backtest_report':
             curves = []
@@ -500,10 +562,13 @@ class Model:
                               xaxis=dict(title='Month Since First Disbursement'),
                               yaxis=dict(title=param))
 
-            fig.show()
+            if show:
+                fig.show()
+
+            return fig
 
     # --- FORECAST FUNCTIONS --- #
-    def forecast_data(self, data, min_months=4, n_months=24, to_usd=True):
+    def forecast_data(self, data, min_months=4, n_months=24):
         """
         Generates a forecast of "Count Borrowers" out to the input number of months.
         The original and forecasted values are returned as a new dataframe, set as
@@ -528,7 +593,7 @@ class Model:
 
         # range of desired time periods
         times = np.arange(1, n_months+1)
-        times_dict = {i: i for i in times}
+        times_dict = {i: i-1 for i in times}
 
         # --- DEFAULT RATE FACTORS --- #
         # compute the default rate std dev across cohorts for the first 12 months
@@ -831,6 +896,10 @@ class Model:
                 c_data['cumulative_cm$_per_original'] = c_data['cm$_per_original'].cumsum()
                 c_data['opex_per_original'] = self.opex_per_original(c_data)
                 c_data['cumulative_opex_per_original'] = c_data['opex_per_original'].cumsum()
+                c_data['opex_coc_per_original'] = self.opex_coc_per_original(c_data)
+                c_data['cumulative_opex_coc_per_original'] = self.opex_coc_per_original(c_data).cumsum()
+                c_data['opex_cpl_per_original'] = self.opex_cpl_per_original(c_data)
+                c_data['cumulative_opex_cpl_per_original'] = self.opex_cpl_per_original(c_data).cumsum()
                 c_data['ltv_per_original'] = self.ltv_per_original(c_data)
                 c_data['cumulative_ltv_per_original'] = c_data['ltv_per_original'].cumsum()
                 c_data['dcf_ltv_per_original'] = self.dcf_ltv_per_original(c_data)
