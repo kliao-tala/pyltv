@@ -93,8 +93,13 @@ class Model:
         self.forecast_cols = ['Count Borrowers', 'borrower_retention', 'borrower_survival', 'loan_size',
                               'loans_per_borrower', 'Count Loans', 'Total Amount', 'interest_rate',
                               'default_rate_7dpd', 'default_rate_51dpd', 'default_rate_365dpd',
-                              'loans_per_original', 'origination_per_original', 'revenue_per_original',
-                              'cm$_per_original', 'opex_per_original', 'ltv_per_original', 'cm%_per_original']
+                              'loans_per_original', 'cumulative_loans_per_original', 'origination_per_original',
+                              'cumulative_origination_per_original', 'revenue_per_original',
+                              'cumulative_revenue_per_original', 'cm$_per_original', 'cumulative_cm$_per_original',
+                              'opex_per_original', 'cumulative_opex_per_original',
+                              'cumulative_opex_cpl_per_original', 'cumulative_opex_coc_per_original',
+                              'ltv_per_original', 'cumulative_ltv_per_original', 'dcf_ltv_per_original',
+                              'cumulative_dcf_ltv_per_original', 'cm%_per_original']
 
         # model attributes to be defined later on
         self.inputs = None
@@ -559,9 +564,14 @@ class Model:
 
             metric = param.split('-')[1].upper()
             fig = go.Figure(traces)
-            fig.update_layout(title=f'{self.backtest_months} Month Backtest - {metric}',
-                              xaxis=dict(title='Month Since First Disbursement'),
-                              yaxis=dict(title=param))
+            if 'pe' in param:
+                fig.update_layout(title=f'{self.backtest_months} Month Backtest - {metric}',
+                                  xaxis=dict(title='Month Since First Disbursement'),
+                                  yaxis=dict(title=param + ' (%)'))
+            else:
+                fig.update_layout(title=f'{self.backtest_months} Month Backtest - {metric}',
+                                  xaxis=dict(title='Month Since First Disbursement'),
+                                  yaxis=dict(title=param))
 
             if show:
                 fig.show()
@@ -598,7 +608,7 @@ class Model:
 
         # --- DEFAULT RATE FACTORS --- #
         # compute the default rate std dev across cohorts for the first 12 months
-        default_std = data[['cohort', 'default_rate_7dpd']].copy()
+        default_std = self.data[['cohort', 'default_rate_7dpd']].copy()
         default_std = default_std.set_index('cohort', append=True).unstack(-2).iloc[:, :12]
         default_std = default_std.std()
         default_std.index = np.arange(1, len(default_std) + 1)
@@ -616,11 +626,11 @@ class Model:
         default_expected_365 = self.ltv_expected['default_rate_365dpd']
 
         default_factors = []
-        for c in data.cohort.unique():
-            c_data = data[data.cohort==c]['default_rate_7dpd']
+        for c in self.data.cohort.unique():
+            c_data = self.data[self.data.cohort==c]['default_rate_7dpd']
 
             default_factors.append(np.mean((c_data - default_expected_7[:len(c_data)])/default_std_fit[:len(c_data)]))
-        default_factors = pd.Series(default_factors, index=data.cohort.unique())
+        default_factors = pd.Series(default_factors, index=self.data.cohort.unique())
         # -------------------------------#
 
         for cohort in data.cohort.unique():
@@ -948,10 +958,10 @@ class Model:
                 error = np.mean(forecast[:len(actual)] - actual)
             # mean absolute percent error
             elif metric == 'mape':
-                error = (1 / len(actual)) * sum(abs(forecast[:len(actual)] - actual) / actual)
+                error = round(100 * (1 / len(actual)) * sum(abs(forecast[:len(actual)] - actual) / actual), 2)
             # mean percent error
             elif metric == 'mpe':
-                error = (1 / len(actual)) * sum((forecast[:len(actual)] - actual) / actual)
+                error = round(100 * (1 / len(actual)) * sum((forecast[:len(actual)] - actual) / actual), 2)
             return error
 
         # --- Generate limited data --- #
