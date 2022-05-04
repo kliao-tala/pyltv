@@ -299,9 +299,10 @@ class Model:
         elif dpd == 51:
             default_rate = cohort_data['Default Rate Amount 51D'].copy()
 
+            recovery_rate_30 = float(self.inputs.loc[self.market, 'recovery_7-30'])
             recovery_rate_51 = float(self.inputs.loc[self.market, 'recovery_30-51'])
-
-            derived_51dpd = cohort_data['Default Rate Amount 30D']*(1-recovery_rate_51)
+            derived_30dpd = cohort_data['Default Rate Amount 7D']*(1-recovery_rate_30)
+            derived_51dpd = derived_30dpd*(1-recovery_rate_51)
 
             return default_rate.fillna(derived_51dpd)
 
@@ -862,7 +863,7 @@ class Model:
                 # 51DPD
                 default_fcast = []
                 for t in times:
-                    if t < n_valid + 1:
+                    if t < n_valid+1:
                         default_fcast.append(c_data.loc[t, 'default_rate_51dpd'])
                     else:
                         default_fcast.append(default_expected_51[t] + default_factors[cohort] * default_std_fit[t])
@@ -873,7 +874,7 @@ class Model:
                 # 365DPD
                 default_fcast = []
                 for t in times:
-                    if t < n_valid + 1:
+                    if t < n_valid+1:
                         default_fcast.append(c_data.loc[t, 'default_rate_365dpd'])
                     else:
                         default_fcast.append(default_expected_365[t] + default_factors[cohort] * default_std_fit[t])
@@ -911,7 +912,7 @@ class Model:
 
         return pd.concat(forecast_dfs)
 
-    def backtest_data(self, data, months=4, metrics = ['rmse', 'me', 'mape', 'mpe']):
+    def backtest_data(self, data, hold_months=4, fcast_months=50, metrics = ['rmse', 'me', 'mape', 'mpe']):
         """
         Backtest forecasted values against actuals.
 
@@ -924,11 +925,11 @@ class Model:
         # print the number of cohorts that will be backtested.
         cohort_count = 0
         for cohort in data.cohort.unique():
-            if len(data[data.cohort == cohort]) - months >= self.min_months:
+            if len(data[data.cohort == cohort]) - hold_months >= self.min_months:
                 cohort_count += 1
 
-        self.backtest_months = months
-        print(f'Backtesting {months} months.')
+        self.backtest_months = hold_months
+        print(f'Backtesting {hold_months} months.')
         print(f'{cohort_count} cohorts will be backtested.')
 
         def compute_error(actual, forecast, metric):
@@ -962,12 +963,12 @@ class Model:
             c_data = data[data.cohort == cohort]
 
             # only backtest if remaining data has at least 4 data points
-            if len(c_data) - months >= self.min_months:
+            if len(c_data) - hold_months >= self.min_months:
                 # limit data
-                c_data = c_data.iloc[:len(c_data) - months, :]
+                c_data = c_data.iloc[:len(c_data) - hold_months, :]
 
                 # forecast the limited data
-                c_data = self.forecast_data(c_data)
+                c_data = self.forecast_data(c_data, n_months=fcast_months)
 
                 # get forecast overlap with actuals
                 actual = self.data[self.data['First Loan Local Disbursement Month'] == cohort]
