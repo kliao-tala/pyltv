@@ -90,21 +90,15 @@ class Model:
         self.eps = epsilon
         self.default_stress = default_stress
         self.retention_effect = retention_effect
-        self.forecast_cols = ['Count Borrowers', 'borrower_retention', 'borrower_survival', 'loan_size',
-                              'loans_per_borrower', 'Count Loans', 'Total Amount', 'interest_rate',
-                              'default_rate_7dpd', 'default_rate_51dpd', 'default_rate_365dpd',
-                              'loans_per_original', 'cumulative_loans_per_original', 'origination_per_original',
-                              'cumulative_origination_per_original', 'revenue_per_original',
-                              'cumulative_revenue_per_original', 'cm$_per_original', 'cumulative_cm$_per_original',
-                              'opex_per_original', 'cumulative_opex_per_original',
-                              'cumulative_opex_cpl_per_original', 'cumulative_opex_coc_per_original',
-                              'ltv_per_original', 'cumulative_ltv_per_original', 'dcf_ltv_per_original',
-                              'cumulative_dcf_ltv_per_original', 'cm%_per_original']
+        self.label_cols = ['First Loan Local Disbursement Month', 'Total Interest Assessed', 'Total Rollover Charged',
+       'Total Rollover Reversed', 'Months Since First Loan Disbursed', 'Count First Loans', 'Default Rate Amount 7D',
+       'Default Rate Amount 30D', 'Default Rate Amount 51D', 'cohort', 'data_type']
 
         # model attributes to be defined later on
         self.inputs = None
         self.ltv_expected = None
         self.min_months = None
+        self.backtest_months = None
 
         # load data that the models depend on and clean LTV data from Looker
         self.load_dependent_data()
@@ -172,7 +166,7 @@ class Model:
         for c in self.data.cohort.unique():
             c_data = self.data[self.data.cohort == c]
 
-            cohort_data.append(c_data.iloc[:-2])
+            cohort_data.append(c_data.iloc[:-3])
 
         self.data = pd.concat(cohort_data, axis=0)
 
@@ -790,10 +784,11 @@ class Model:
                     # list to hold forecasted values
                     forecast = [c.iloc[0]]
                     for t in times:
-                        forecast.append(n * s(t, alpha, beta))
+                        if t > 1:
+                            forecast.append(n * s(t, alpha, beta))
 
                     # convert list to dataframe
-                    count_forecast = pd.DataFrame(forecast, index=[0]+times, columns=['Count Borrowers'])
+                    count_forecast = pd.DataFrame(forecast, index=times, columns=['Count Borrowers'])
                     survival_forecast = 0.98 * count_forecast/count_forecast.shift(1)
 
                     # get max survival from inputs
@@ -842,23 +837,7 @@ class Model:
                                                      self.ltv_expected.loc[i, 'interest_rate'] / self.ltv_expected.loc[
                                                          i - 1, 'interest_rate']
 
-                # forecast default rate 7dpd
-                def power_fit1():
-                    default = c_data.default_rate_7dpd.dropna()
-
-                    def func(t, A, B):
-                        return A * (t ** B)
-
-                    params, covs = curve_fit(func, default.index, default)
-
-                    t = list(range(1, n_months + 2))
-                    fit = func(t, params[0], params[1])
-                    fit = pd.Series(fit, index=t).reset_index(drop=True)
-
-                    return c_data['default_rate_7dpd'].fillna(fit)
-
-                #c_data['default_rate_7dpd'] = power_fit1()
-
+                # Forecast default rates
                 # 7DPD
                 default_fcast = []
                 for t in times:
@@ -964,10 +943,10 @@ class Model:
                 error = round(100 * (1 / len(actual)) * sum((forecast[:len(actual)] - actual) / actual), 2)
             return error
 
-        # --- Generate limited data --- #
-
-        limited_data = []
         backtest_report = []
+        # --- Generate limited data --- #
+        limited_data = []
+
         for cohort in data.cohort.unique():
             # data for current cohort
             c_data = data[data.cohort == cohort]
@@ -989,7 +968,10 @@ class Model:
                 # compute errors
                 backtest_report_cols = []
                 errors = []
-                for col in self.forecast_cols:
+
+                cols = [c for c in self.data.columns if c not in self.label_cols]
+
+                for col in cols:
                     # error
                     c_data.loc[start:stop, f'error-{col}'] = c_data.loc[start:stop, col] - actual.loc[start:stop, col]
                     # % error
