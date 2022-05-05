@@ -18,7 +18,7 @@ pio.templates.default = "plotly_white"
 
 # --- MODEL PARAMETERS --- #
 # exchange rates
-forex = {'ke': 108, 'ph': 51, 'mx': 20}
+forex = {'ke': 115, 'ph': 51, 'mx': 20}
 # epsilon to avoid division by 0
 epsilon = 1e-50
 # initial values for alpha & beta in sbg model.
@@ -110,7 +110,7 @@ class Model:
         min_date = str(pd.to_datetime(self.data.cohort).min())[:7]
         max_date = str(pd.to_datetime(self.data.cohort).max())[:7]
         n_months = self.data.cohort.nunique()
-        print(f'Data spans {min_date} to {max_date}')
+        print(f'Raw data spans {min_date} to {max_date}')
         print(f'Total # of cohorts: {n_months}')
         print('')
 
@@ -161,7 +161,8 @@ class Model:
         # add more convenient cohort label column
         self.data['cohort'] = self.data['First Loan Local Disbursement Month']
 
-        # remove the last two months of data for each cohort
+        # remove the last 3 months of data for each cohort
+        # this is to ensure default_rate_51dpd data is fully baked
         cohort_data = []
         for c in self.data.cohort.unique():
             c_data = self.data[self.data.cohort == c]
@@ -608,7 +609,7 @@ class Model:
         default_std.index = np.arange(1, len(default_std) + 1)
 
         def func(t, A, B):
-            return A * (t ** B)
+            return A * t ** B
 
         params, covs = curve_fit(func, default_std.index, default_std)
 
@@ -625,6 +626,7 @@ class Model:
 
             default_factors.append(np.mean((c_data - default_expected_7[:len(c_data)])/default_std_fit[:len(c_data)]))
         default_factors = pd.Series(default_factors, index=self.data.cohort.unique())
+        print(default_factors)
         # -------------------------------#
 
         for cohort in data.cohort.unique():
@@ -669,12 +671,18 @@ class Model:
                         # fit actuals and extract a & b params
                         popt, pcov = curve_fit(power_fit, c.index, c)
 
-                        a = popt[0]
+                        a = 1#popt[0]
                         b = popt[1]
 
-                        # if there is less than 6 months of actuals, scale data.
-                        if len(c) < 6:
-                            b = b + .2 * (6 - len(c) - 1)
+                        # scale b according to market
+                        if self.market=='ke':
+                            if len(c) < 6:
+                                b = b + .02 * (6 - len(c) - 1)
+                        if self.market=='ph':
+                            if len(c) < 6:
+                                b = b + .02 * (6 - len(c) - 1)
+                        if self.market=='mx':
+                            b = b - .015 * (18 - len(c) - 1)
 
                         # get max survival from inputs
                         max_survival = self.inputs.loc[self.market, 'max_monthly_borrower_retention']
@@ -819,9 +827,7 @@ class Model:
 
                 # forecast loans_per_borrower
                 for i in c_data[c_data.loans_per_borrower.isnull()].index:
-                    c_data.loc[i, 'loans_per_borrower'] = c_data.loc[i - 1, 'loans_per_borrower'] * \
-                                                          self.ltv_expected.loc[i, 'loans_per_borrower'] / \
-                                                          self.ltv_expected.loc[i - 1, 'loans_per_borrower']
+                    c_data.loc[i, 'loans_per_borrower'] = self.ltv_expected.loc[i, 'loans_per_borrower']
 
                 # forecast Count Loans
                 c_data['Count Loans'] = c_data['Count Loans'].fillna(
@@ -899,7 +905,17 @@ class Model:
                 # add the forecasted data for the cohort to a list, aggregating all cohort forecasts
                 forecast_dfs.append(c_data)
 
-        return pd.concat(forecast_dfs)
+        forecast_df = pd.concat(forecast_dfs)
+
+        # print the date range that the data spans
+        min_date = str(pd.to_datetime(forecast_df.cohort).min())[:7]
+        max_date = str(pd.to_datetime(forecast_df.cohort).max())[:7]
+        n_months = forecast_df.cohort.nunique()
+        print(f'Forecast data spans {min_date} to {max_date}')
+        print(f'Total # of cohorts: {n_months}')
+        print('')
+
+        return forecast_df
 
     def backtest_data(self, data, hold_months=4, fcast_months=50, metrics = ['rmse', 'me', 'mape', 'mpe']):
         """
@@ -972,12 +988,12 @@ class Model:
                 cols = [c for c in self.data.columns if c not in self.label_cols]
 
                 for col in cols:
-                    # error
-                    c_data.loc[start:stop, f'error-{col}'] = c_data.loc[start:stop, col] - actual.loc[start:stop, col]
-                    # % error
-                    c_data.loc[start:stop, f'%error-{col}'] = (c_data.loc[start:stop, col] - actual.loc[start:stop,
-                                                                                             col]) / \
-                                                              actual.loc[start:stop, col]
+                    # # error
+                    # c_data.loc[start:stop, f'error-{col}'] = c_data.loc[start:stop, col] - actual.loc[start:stop, col]
+                    # # % error
+                    # c_data.loc[start:stop, f'%error-{col}'] = (c_data.loc[start:stop, col] - actual.loc[start:stop,
+                    #                                                                          col]) / \
+                    #                                           actual.loc[start:stop, col]
 
                     for metric in metrics:
                         error = compute_error(actual.loc[start:stop, col], c_data.loc[start:stop, col],
