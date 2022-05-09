@@ -167,7 +167,7 @@ class Model:
         for c in self.data.cohort.unique():
             c_data = self.data[self.data.cohort == c]
 
-            cohort_data.append(c_data.iloc[:-3])
+            cohort_data.append(c_data.iloc[:-4])
 
         self.data = pd.concat(cohort_data, axis=0)
 
@@ -559,12 +559,7 @@ class Model:
 
             metric = param.split('-')[1].upper()
             fig = go.Figure(traces)
-            if 'pe' in param:
-                fig.update_layout(title=f'{self.backtest_months} Month Backtest - {metric}',
-                                  xaxis=dict(title='Month Since First Disbursement'),
-                                  yaxis=dict(title=param + ' (%)'))
-            else:
-                fig.update_layout(title=f'{self.backtest_months} Month Backtest - {metric}',
+            fig.update_layout(title=f'{self.backtest_months} Month Backtest - {metric}',
                                   xaxis=dict(title='Month Since First Disbursement'),
                                   yaxis=dict(title=param))
 
@@ -626,7 +621,6 @@ class Model:
 
             default_factors.append(np.mean((c_data - default_expected_7[:len(c_data)])/default_std_fit[:len(c_data)]))
         default_factors = pd.Series(default_factors, index=self.data.cohort.unique())
-        print(default_factors)
         # -------------------------------#
 
         for cohort in data.cohort.unique():
@@ -907,17 +901,9 @@ class Model:
 
         forecast_df = pd.concat(forecast_dfs)
 
-        # print the date range that the data spans
-        min_date = str(pd.to_datetime(forecast_df.cohort).min())[:7]
-        max_date = str(pd.to_datetime(forecast_df.cohort).max())[:7]
-        n_months = forecast_df.cohort.nunique()
-        print(f'Forecast data spans {min_date} to {max_date}')
-        print(f'Total # of cohorts: {n_months}')
-        print('')
-
         return forecast_df
 
-    def backtest_data(self, data, hold_months=4, fcast_months=50, metrics = ['rmse', 'me', 'mape', 'mpe']):
+    def backtest_data(self, data, min_months=4, hold_months=4, fcast_months=50, metrics = ['rmse', 'me', 'mape', 'mpe']):
         """
         Backtest forecasted values against actuals.
 
@@ -953,15 +939,15 @@ class Model:
                 error = np.mean(forecast[:len(actual)] - actual)
             # mean absolute percent error
             elif metric == 'mape':
-                error = round(100 * (1 / len(actual)) * sum(abs(forecast[:len(actual)] - actual) / actual), 2)
+                error = round(100 * (1 / len(actual)) * sum(abs((forecast[:len(actual)] - actual) / actual)), 2)
             # mean percent error
             elif metric == 'mpe':
                 error = round(100 * (1 / len(actual)) * sum((forecast[:len(actual)] - actual) / actual), 2)
             return error
 
+        # --- Generate backtest data --- #
         backtest_report = []
-        # --- Generate limited data --- #
-        limited_data = []
+        backtest_data = []
 
         for cohort in data.cohort.unique():
             # data for current cohort
@@ -973,12 +959,12 @@ class Model:
                 c_data = c_data.iloc[:len(c_data) - hold_months, :]
 
                 # forecast the limited data
-                c_data = self.forecast_data(c_data, n_months=fcast_months)
+                predicted_data = self.forecast_data(c_data, min_months=min_months, n_months=fcast_months)
 
                 # get forecast overlap with actuals
                 actual = self.data[self.data['First Loan Local Disbursement Month'] == cohort]
 
-                start = c_data[c_data.data_type == 'forecast'].index.min()
+                start = predicted_data[predicted_data.data_type == 'forecast'].index.min()
                 stop = actual.index.max()
 
                 # compute errors
@@ -988,15 +974,8 @@ class Model:
                 cols = [c for c in self.data.columns if c not in self.label_cols]
 
                 for col in cols:
-                    # # error
-                    # c_data.loc[start:stop, f'error-{col}'] = c_data.loc[start:stop, col] - actual.loc[start:stop, col]
-                    # # % error
-                    # c_data.loc[start:stop, f'%error-{col}'] = (c_data.loc[start:stop, col] - actual.loc[start:stop,
-                    #                                                                          col]) / \
-                    #                                           actual.loc[start:stop, col]
-
                     for metric in metrics:
-                        error = compute_error(actual.loc[start:stop, col], c_data.loc[start:stop, col],
+                        error = compute_error(actual.loc[start:stop, col], predicted_data.loc[start:stop, col],
                                               metric=metric)
 
                         backtest_report_cols += [f'{col}-{metric}']
@@ -1005,9 +984,9 @@ class Model:
 
                 backtest_report.append(pd.DataFrame.from_dict({cohort: errors}, orient='index',
                                                               columns=backtest_report_cols))
-                limited_data.append(c_data)
+                backtest_data.append(predicted_data)
 
-        backtest_data = pd.concat(limited_data)
+        backtest_data = pd.concat(backtest_data)
         backtest_report = pd.concat(backtest_report, axis=0)
         backtest_report['cohort'] = backtest_report.index
 
