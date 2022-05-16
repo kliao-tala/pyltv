@@ -55,8 +55,8 @@ class Model:
         Computes borrower retention.
     """
 
-    def __init__(self, data, market='ke', fcast_method='powerslope', default_stress=None,
-                 retention_effect=False, convenient=True):
+    def __init__(self, data, market='ke', fcast_method='powerslope', bake_duration=4, default_stress=None,
+                 retention_effect=False, convenient=True, historic=False):
         """
         Sets model attributes, loads additional data required for models (inputs &
         ltv_expected), and cleans data.
@@ -84,6 +84,8 @@ class Model:
         self.data = data
         self.market = market
         self.method = fcast_method
+        self.historic = historic
+        self.bake_duration = bake_duration
         self.alpha = alpha
         self.beta = beta
         self.fx = forex[market]
@@ -91,10 +93,11 @@ class Model:
         self.default_stress = default_stress
         self.retention_effect = retention_effect
         self.label_cols = ['First Loan Local Disbursement Month', 'Total Interest Assessed', 'Total Rollover Charged',
-       'Total Rollover Reversed', 'Months Since First Loan Disbursed', 'Count First Loans', 'Default Rate Amount 7D',
+       'Total Rollover Reversed', 'Months Since First Loan Disbursed', 'Default Rate Amount 7D',
        'Default Rate Amount 30D', 'Default Rate Amount 51D', 'cohort', 'data_type']
 
         # model attributes to be defined later on
+        self.raw = None
         self.inputs = None
         self.ltv_expected = None
         self.min_months = None
@@ -104,7 +107,8 @@ class Model:
         self.load_dependent_data()
         if convenient:
             self.clean_data()
-            self.generate_features()
+            self.raw = self.generate_features(self.raw)
+            self.data = self.generate_features(self.data)
 
         # print the date range that the data spans
         min_date = str(pd.to_datetime(self.data.cohort).min())[:7]
@@ -119,14 +123,27 @@ class Model:
         Loads other data that the model depends on. ltv_inputs.csv contains various inputs required for the forecasting
         models. ltv_expected.csv contains the historical LTV data.
         """
-        self.inputs = pd.read_csv('data/ltv_inputs.csv').set_index('market')
-        self.ltv_expected = pd.read_csv(f'data/{self.market}_ltv_expected.csv')
+        self.inputs = pd.read_csv('data/model_dependencies/ltv_inputs.csv').set_index('market')
+        if self.historic:
+            self.ltv_expected = pd.read_csv(f'data/model_dependencies/{self.market}_historical_ltv_expected.csv')
+        else:
+            self.ltv_expected = pd.read_csv(f'data/model_dependencies/{self.market}_ltv_expected.csv')
         self.ltv_expected.index = np.arange(1, len(self.ltv_expected)+1)
 
     def clean_data(self):
         """
         Performs various data clean up steps to prepare data for model.
         """
+        # remove any leading or trailing spaces in col names
+        self.data.columns = [c.strip() for c in self.data.columns]
+
+        # rename any columns with unmatching names
+        self.data = self.data.rename(columns={'First Loan Disbursement Month': 'First Loan Local Disbursement Month',
+                                    'Total Principal Amount': 'Total Amount',
+                                    'Default Rate Amount 7d': 'Default Rate Amount 7D',
+                                    'Default Rate Amount 51d': 'Default Rate Amount 51D',
+                                    'Default Rate Amount 30d': 'Default Rate Amount 30D'})
+
         # add a leading 0 to the month if there isn't one already to match rest of the data
         for date in self.data['First Loan Local Disbursement Month'].unique():
             if len(date) < 7:
@@ -135,8 +152,7 @@ class Model:
                 self.data = self.data.replace({date: year + '-' + month})
 
         # convert cols to appropriate datatypes
-        int_cols = ['Count First Loans',
-                    'Count Borrowers',
+        int_cols = ['Count Borrowers',
                     'Count Loans',
                     'Total Amount',
                     'Total Interest Assessed',
@@ -147,6 +163,11 @@ class Model:
                 self.data[col] = pd.to_numeric(self.data[col].str.replace(',', ''))
             except AttributeError:
                 self.data[col] = pd.to_numeric(self.data[col])
+
+        # convert month since disbursement to int
+        if self.data['Months Since First Loan Disbursed'].dtype == 'O':
+            self.data['Months Since First Loan Disbursed'] = self.data['Months Since First Loan Disbursed'].apply(
+                lambda x: int(x.split(' ')[0]))
 
         # drop any negative months since first loan
         self.data = self.data[~self.data['Months Since First Loan Disbursed'] < 0]
@@ -161,13 +182,16 @@ class Model:
         # add more convenient cohort label column
         self.data['cohort'] = self.data['First Loan Local Disbursement Month']
 
-        # remove the last 3 months of data for each cohort
+        # save raw data df before removing data for forecast
+        self.raw = self.data.copy()
+
+        # remove the last 4 months of data for each cohort
         # this is to ensure default_rate_51dpd data is fully baked
         cohort_data = []
         for c in self.data.cohort.unique():
             c_data = self.data[self.data.cohort == c]
 
-            cohort_data.append(c_data.iloc[:-4])
+            cohort_data.append(c_data.iloc[:-self.bake_duration])
 
         self.data = pd.concat(cohort_data, axis=0)
 
@@ -382,16 +406,16 @@ class Model:
     def credit_margin_percent(self, cohort_data):
         return cohort_data['ltv_per_original'] / cohort_data['revenue_per_original']
 
-    def generate_features(self, to_usd=True):
+    def generate_features(self, data, to_usd=True):
         """
         Generate all features required for pLTV model.
         """
         cohorts = []
 
         # for each cohort
-        for cohort in self.data.loc[:, 'First Loan Local Disbursement Month'].unique():
+        for cohort in data.loc[:, 'First Loan Local Disbursement Month'].unique():
             # omit the last month of incomplete data
-            cohort_data = self.data[self.data['First Loan Local Disbursement Month'] == cohort].copy()
+            cohort_data = data[data['First Loan Local Disbursement Month'] == cohort].copy()
             cohort_data.index = np.arange(1, len(cohort_data)+1)
 
             cohort_data['loans_per_borrower'] = self.loans_per_borrower(cohort_data)
@@ -469,7 +493,7 @@ class Model:
             cohorts.append(cohort_data)
 
         self.cohorts = cohorts
-        self.data = pd.concat(cohorts, axis=0)
+        return pd.concat(cohorts, axis=0)
 
     def plot_cohorts(self, param, data='raw', show=False):
         """
@@ -480,7 +504,7 @@ class Model:
 
         """
 
-        if data == 'raw' or data == 'forecast' or data == 'backtest':
+        if data == 'clean' or data == 'raw' or data == 'forecast' or data == 'backtest':
             curves = []
 
             if data == 'forecast':
@@ -509,9 +533,17 @@ class Model:
 
                     curves.append(output)
 
-            elif data == 'raw':
+            elif data == 'clean':
                 for cohort in self.data.cohort.unique():
                     output = self.data[self.data.cohort == cohort][param]
+
+                    output.name = cohort
+
+                    curves.append(output)
+
+            elif data == 'raw':
+                for cohort in self.raw.cohort.unique():
+                    output = self.raw[self.raw.cohort == cohort][param]
 
                     output.name = cohort
 
@@ -569,7 +601,7 @@ class Model:
             return fig
 
     # --- FORECAST FUNCTIONS --- #
-    def forecast_data(self, data, min_months=4, n_months=24):
+    def forecast_data(self, data, min_months=5, n_months=50):
         """
         Generates a forecast of "Count Borrowers" out to the input number of months.
         The original and forecasted values are returned as a new dataframe, set as
@@ -649,7 +681,6 @@ class Model:
                     c_data['First Loan Local Disbursement Month'].ffill()
                 c_data['Months Since First Loan Disbursed'] = \
                     c_data['Months Since First Loan Disbursed'].fillna(times_dict).astype(int)
-                c_data['Count First Loans'] = c_data['Count First Loans'].ffill()
 
                 # label forecasted data
                 c_data.data_type = c_data.data_type.fillna('forecast')
@@ -903,7 +934,8 @@ class Model:
 
         return forecast_df
 
-    def backtest_data(self, data, min_months=4, hold_months=4, fcast_months=50, metrics = ['rmse', 'me', 'mape', 'mpe']):
+    def backtest_data(self, data, min_months=4, hold_months=4, fcast_months=50,
+                      metrics=['error', 'rmse', 'me', 'mape', 'mpe']):
         """
         Backtest forecasted values against actuals.
 
@@ -927,7 +959,9 @@ class Model:
             """
             Test forecast performance against actuals using method defined by metric.
             """
-
+            # raw error
+            if metric == 'error':
+                error = forecast[:len(actual)] - actual
             # root mean squared error
             if metric == 'rmse':
                 error = np.sqrt((1 / len(actual)) * sum((forecast[:len(actual)] - actual) ** 2))
@@ -993,7 +1027,7 @@ class Model:
         return backtest_data, backtest_report
 
     def run_all(self, backtest_months=4):
-        self.generate_features()
+        self.data = self.generate_features(self.data)
         self.forecast = self.forecast_data(self.data)
         self.backtest, self.backtest_report = self.backtest_data(self.data, months=backtest_months)
 

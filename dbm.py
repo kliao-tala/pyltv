@@ -115,7 +115,7 @@ class DBM:
             results = curs.execute(query)
             return pd.DataFrame.from_records(iter(results), columns=[c[0] for c in results.description])
 
-    def get_market_data(self, market='ke', start_date='2020-09-01', days_before=60):
+    def get_market_data(self, market='ke', start_date='2020-09-01', days_before=0):
         """
         Query the database with the standard query from the LTV Looker dashboard. Search
         parameters are replaced with the inputs.
