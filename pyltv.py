@@ -903,8 +903,8 @@ class Model:
                 c_data['default_rate_365dpd'] = default_fcast
 
                 if self.default_stress:
-                    c_data['default_rate_7dpd'] += self.default_stress
-                    c_data['default_rate_365dpd'] += self.default_stress
+                    c_data['default_rate_7dpd'] = self.default_stress * c_data['default_rate_7dpd']
+                    c_data['default_rate_365dpd'] = self.default_stress * c_data['default_rate_365dpd']
 
                 # compute remaining columns from forecasts
                 c_data['loans_per_original'] = self.loans_per_original(c_data)
