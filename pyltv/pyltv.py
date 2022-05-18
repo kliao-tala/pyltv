@@ -935,7 +935,7 @@ class Model:
         return forecast_df
 
     def backtest_data(self, data, min_months=4, hold_months=4, fcast_months=50,
-                      metrics=['error', 'rmse', 'me', 'mape', 'mpe']):
+                      metrics=['rmse', 'me', 'mape', 'mpe']):
         """
         Backtest forecasted values against actuals.
 
@@ -959,9 +959,6 @@ class Model:
             """
             Test forecast performance against actuals using method defined by metric.
             """
-            # raw error
-            if metric == 'error':
-                error = forecast[:len(actual)] - actual
             # root mean squared error
             if metric == 'rmse':
                 error = np.sqrt((1 / len(actual)) * sum((forecast[:len(actual)] - actual) ** 2))

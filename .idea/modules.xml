@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/pLTV.iml" filepath="$PROJECT_DIR$/.idea/pLTV.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/pyltv.iml" filepath="$PROJECT_DIR$/.idea/pyltv.iml" />
     </modules>
   </component>
 </project>
