@@ -1003,6 +1003,7 @@ class Model:
                 errors = []
 
                 cols = [c for c in self.data.columns if c not in self.label_cols]
+                cols.remove('Count First Loans')
 
                 for col in cols:
                     for metric in metrics:
