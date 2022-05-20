@@ -56,7 +56,7 @@ class Model:
     """
 
     def __init__(self, data, market='ke', fcast_method='powerslope', bake_duration=4, default_stress=None,
-                 retention_effect=False, convenient=True, historic=False):
+                 retention_effect=False, convenient=True, historic=False, expectations=None):
         """
         Sets model attributes, loads additional data required for models (inputs &
         ltv_expected), and cleans data.
@@ -92,6 +92,7 @@ class Model:
         self.eps = epsilon
         self.default_stress = default_stress
         self.retention_effect = retention_effect
+        self.expectations = expectations
         self.label_cols = ['First Loan Local Disbursement Month', 'Total Interest Assessed', 'Total Rollover Charged',
        'Total Rollover Reversed', 'Months Since First Loan Disbursed', 'Default Rate Amount 7D',
        'Default Rate Amount 30D', 'Default Rate Amount 51D', 'cohort', 'data_type']
@@ -126,6 +127,8 @@ class Model:
         self.inputs = pd.read_csv('data/model_dependencies/ltv_inputs.csv').set_index('market')
         if self.historic:
             self.ltv_expected = pd.read_csv(f'data/model_dependencies/{self.market}_historical_ltv_expected.csv')
+        elif self.expectations:
+            self.ltv_expected = pd.read_csv(f'data/model_dependencies/{self.expectations}')
         else:
             self.ltv_expected = pd.read_csv(f'data/model_dependencies/{self.market}_ltv_expected.csv')
         self.ltv_expected.index = np.arange(1, len(self.ltv_expected)+1)
