@@ -188,6 +188,15 @@ class Model:
         # save raw data df before removing data for forecast
         self.raw = self.data.copy()
 
+        # remove the last mo of the raw data
+        cohort_data = []
+        for c in self.raw.cohort.unique():
+            c_data = self.raw[self.raw.cohort == c]
+
+            cohort_data.append(c_data.iloc[:-1])
+
+        self.raw = pd.concat(cohort_data, axis=0)
+
         # remove the last 4 months of data for each cohort
         # this is to ensure default_rate_51dpd data is fully baked
         cohort_data = []
