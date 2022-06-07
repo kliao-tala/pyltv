@@ -211,7 +211,7 @@ def credit_margin(cohort_data):
     CrM_per_original : pandas Series
     """
     bad_debt = (cohort_data['origination_per_original'] + cohort_data['revenue_per_original']) * \
-               cohort_data['default_rate_365dpd']
+        cohort_data['default_rate_365dpd']
 
     return cohort_data['revenue_per_original'] - bad_debt
 
@@ -284,14 +284,52 @@ def opex_cpl_per_original(cohort_data, market):
 
 
 def ltv_per_original(cohort_data):
+    """
+    Lifetime value (LTV) per original. LTV is equal to credit margin minus OPEX.
+
+    Parameters
+    ----------
+    cohort_data : pandas DataFrame
+        Data for a single cohort by months since first loan disbursement.
+
+    Returns
+    -------
+    ltv_per_original : pandas Series
+    """
     return cohort_data['cm$_per_original'] - cohort_data['opex_per_original']
 
 
 def dcf_ltv_per_original(cohort_data):
+    """
+    Discounted Lifetime value (LTV) per original. The LTV is discounted based on
+    a discounted rate of return specified in the config file.
+
+    Parameters
+    ----------
+    cohort_data : pandas DataFrame
+        Data for a single cohort by months since first loan disbursement.
+
+    Returns
+    -------
+    ltv_per_original : pandas Series
+    """
     return cohort_data['ltv_per_original']/(1+(config['dcf']/12)*cohort_data['ltv_per_original'].index)
 
 
 def credit_margin_percent(cohort_data):
+    """
+    Credit margin percent (CM%) per original. LTV as a proportion of
+    revenue_per_original.
+
+    Parameters
+    ----------
+    cohort_data : pandas DataFrame
+        Data for a single cohort by months since first loan disbursement.
+
+    Returns
+    -------
+    crm%_per_original : pandas Series
+    """
     return cohort_data['ltv_per_original'] / cohort_data['revenue_per_original']
 
 
