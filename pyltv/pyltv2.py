@@ -8,7 +8,8 @@ import pandas as pd
 from scipy.optimize import curve_fit, minimize
 from scipy.signal import savgol_filter
 from sbg import s, log_likelihood
-from model import DataModel
+from model import DataManager
+from config import config
 
 # plotting
 from plotly import graph_objects as go
@@ -19,7 +20,7 @@ pio.templates.default = "plotly_white"
 
 
 # --- MODEL --- #
-class pyltv2(DataModel):
+class pyltv2(DataManager):
     def __init__(self, data, market, to_usd=True, bake_duration=4, convenient=True):
         super().__init__(data, market, to_usd, bake_duration, convenient)
 
@@ -130,7 +131,7 @@ class pyltv2(DataModel):
                         b = b - .015 * (18 - len(c) - 1)
 
                     # get max survival from inputs
-                    max_survival = self.inputs.loc[self.market, 'max_monthly_borrower_retention']
+                    max_survival = config['max_survival'][self.market]
 
                     # take the slope of the power fit between the current and previous time periods
                     # errstate handles division by 0 errors
