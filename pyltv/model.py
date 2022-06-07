@@ -1,7 +1,8 @@
 # -----------------------------------------------------------------------------------------------------------------
-# Data Model
+# Data Manager
 #
-# This library defines the base data model class from which all pyLTV models can be built from.
+# This library defines a data manager class that allows data cleaning, feature generation, and plotting
+# functionality. Forecasting & backtesting models can be built on top of this base class.
 # -----------------------------------------------------------------------------------------------------------------
 import numpy as np
 import pandas as pd
@@ -362,7 +363,7 @@ class DataManager:
         Performs all data cleaning steps required before modeling.
     """
 
-    def __init__(self, data, market, to_usd=True, bake_duration=None):
+    def __init__(self, data, market, to_usd=True, bake_duration=4):
         """
         Sets model attributes, loads additional data required for models (inputs &
         ltv_expected), and cleans data.
@@ -386,9 +387,16 @@ class DataManager:
         self.bake_duration = bake_duration
         self.config = config
 
-        # load data that the models depend on
+        # placeholder attributes for forecast & backtest data
+        self.forecast = None
+        self.backtest = None
+        self.backtest_report = None
+        self.backtest_months = None
+
+        # load recovery rates
         self.recovery_rates = pd.read_csv('data/model_dependencies/recovery_rates.csv').set_index('market')
 
+        # clean data and generate features
         self.clean_data()
         self.raw = self.generate_features(self.raw)
         self.data = self.generate_features(self.data)
@@ -475,16 +483,12 @@ class DataManager:
 
         cohort_data = []
         for c in self.data.cohort.unique():
-            c_data = self.data[self.data.cohort == c]
+            c_data = self.data[self.data.cohort == c].copy()
             c_data.index = np.arange(1, len(c_data)+1)
 
             # remove the last "bake_duration" months of data for each cohort
-            # this is to ensure default_rate_7dpd data is fully baked
-            if self.bake_duration is not None:
-                print('removing 1 month')
-                cohort_data.append(c_data.iloc[:-self.bake_duration])
-            else:
-                cohort_data.append(c_data)
+            # this is to ensure default_rate_51dpd data is fully baked
+            cohort_data.append(c_data.iloc[:-self.bake_duration])
 
         self.data = pd.concat(cohort_data, axis=0)
 
@@ -492,11 +496,20 @@ class DataManager:
     def generate_features(self, data):
         """
         Generate all features required for pLTV model.
+
+        Parameters
+        ----------
+        data : pandas DataFrame
+            Data to generate features for. Can be raw or cleaned data.
         """
         cohort_dfs = []
+
+        # iterate through all cohorts individually
         for c in data.cohort.unique():
+            # create copy of current cohort dataframe
             cohort_data = data[data.cohort == c].copy()
 
+            # generate features
             cohort_data['borrower_retention'] = borrower_retention(cohort_data)
             cohort_data['borrower_survival'] = borrower_survival(cohort_data)
             cohort_data['loans_per_borrower'] = loans_per_borrower(cohort_data)
@@ -504,7 +517,7 @@ class DataManager:
             cohort_data['interest_rate'] = interest_rate(cohort_data)
             cohort_data['default_rate_7dpd'] = default_rate(cohort_data, self.market, self.recovery_rates, dpd=7)
             cohort_data['default_rate_51dpd'] = default_rate(cohort_data, self.market, self.recovery_rates, dpd=51)
-            cohort_data['default_rate_365dpd'] = default_rate(cohort_data,self.market, self.recovery_rates, dpd=365)
+            cohort_data['default_rate_365dpd'] = default_rate(cohort_data, self.market, self.recovery_rates, dpd=365)
             cohort_data['loans_per_original'] = loans_per_original(cohort_data)
             cohort_data['cumulative_loans_per_original'] = cohort_data['loans_per_original'].cumsum()
             cohort_data['origination_per_original'] = origination_per_original(cohort_data)
@@ -529,107 +542,133 @@ class DataManager:
 
         return pd.concat(cohort_dfs)
 
-    def plot_cohorts(self, param, data='raw', show=False):
+    def plot_cohorts(self, param, dataset='clean', show=False):
         """
-        Generate scatter plot for a specific paramter.
+        Generate scatter plot for a specific parameter.
 
         Parameters
         ----------
-
+        param : str
+            Field name to plot. Can be any column in the dataset.
+        dataset : str
+            Specifies which dataset to plot from. Options are:
+                - raw
+                - clean
+                - forecast
+                - backtest
+                - backtest_report
+            If data hasn't been forecast or backtested yet, run forecast_data or
+            backtest_data commands first to generate those datasets.
+        show : bool
+            If True, prints out the figure. If False, returns the figure object without
+            rendering it.
         """
+        # print message about what data is available to plot
+        if dataset != 'raw' and dataset != 'clean' and dataset != 'forecast' and dataset != 'backtest' \
+                and dataset != 'backtest_report':
+            print('Dataset must be one of the following: ')
+            print('raw, clean, forecast, backtest, backtest_report')
 
-        if data == 'clean' or data == 'raw' or data == 'forecast' or data == 'backtest':
-            curves = []
+        else:
 
-            if data == 'forecast':
-                for cohort in self.forecast.cohort.unique():
-                    c_data = self.forecast[self.forecast.cohort == cohort]
-                    for dtype in c_data.data_type.unique():
-                        output = c_data[c_data.data_type == dtype][param]
+            if (dataset == 'forecast' or dataset == 'backtest' or dataset == 'backtest_report') and \
+                    self.__getattribute__(dataset) is None:
+                print("Data has not been forecast or backtested yet.")
+                print('Run forecast_data() or backtest_data() methods first.')
 
-                        output.name = cohort + '-' + dtype
+            else:
+                if dataset == 'clean' or dataset == 'raw' or dataset == 'forecast' or dataset == 'backtest':
+                    curves = []
+
+                    if dataset == 'forecast':
+                        for cohort in self.forecast.cohort.unique():
+                            c_data = self.forecast[self.forecast.cohort == cohort]
+                            for dtype in c_data.data_type.unique():
+                                output = c_data[c_data.data_type == dtype][param]
+
+                                output.name = cohort + '-' + dtype
+
+                                curves.append(output)
+
+                    elif dataset == 'backtest':
+                        for cohort in self.backtest.cohort.unique():
+                            c_data = self.backtest[self.backtest.cohort == cohort]
+
+                            # append raw data
+                            output = self.data[self.data.cohort == cohort][param]
+                            output.name = cohort + '-actual'
+
+                            curves.append(output)
+
+                            # append forecast
+                            output = c_data[c_data.data_type == 'forecast'][param]
+                            output.name = cohort + '-forecast'
+
+                            curves.append(output)
+
+                    elif dataset == 'clean':
+                        for cohort in self.data.cohort.unique():
+                            output = self.data[self.data.cohort == cohort][param]
+
+                            output.name = cohort
+
+                            curves.append(output)
+
+                    elif dataset == 'raw':
+                        for cohort in self.raw.cohort.unique():
+                            output = self.raw[self.raw.cohort == cohort][param]
+
+                            output.name = cohort
+
+                            curves.append(output)
+
+                    traces = []
+
+                    for cohort in curves:
+                        if 'forecast' in cohort.name:
+                            traces.append(go.Scatter(name=cohort.name, x=cohort.index, y=cohort, mode='lines',
+                                                     line=dict(width=3, dash='dash')))
+                        else:
+                            if cohort.notnull().any():
+                                traces.append(go.Scatter(name=cohort.name, x=cohort.index, y=cohort,
+                                                         mode='markers+lines', line=dict(width=2)))
+
+                    fig = go.Figure(traces)
+                    fig.update_layout(title=f'{param} - {dataset.upper()}',
+                                      xaxis=dict(title='Month Since First Disbursement'),
+                                      yaxis=dict(title=param))
+
+                    if show:
+                        fig.show()
+
+                    return fig
+
+                elif dataset == 'backtest_report':
+                    curves = []
+                    for cohort in self.backtest_report.cohort.unique():
+                        c_data = self.backtest_report[self.backtest_report.cohort == cohort]
+                        output = c_data[param]
+
+                        output.name = cohort
 
                         curves.append(output)
 
-            elif data == 'backtest':
-                for cohort in self.backtest.cohort.unique():
-                    c_data = self.backtest[self.backtest.cohort == cohort]
+                    traces = []
+                    for cohort in curves:
+                        traces.append(go.Bar(name=cohort.name, x=cohort.index, y=cohort))
 
-                    # append raw data
-                    output = self.data[self.data.cohort == cohort][param]
-                    output.name = cohort + '-actual'
+                    # add a line showing the overall mean
+                    mean_df = pd.DataFrame(float(self.backtest_report[param].mean()),
+                                           index=self.backtest_report.index, columns=['mean'])
+                    traces.append(go.Scatter(name='mean', x=mean_df.index, y=mean_df['mean'], mode='lines'))
 
-                    curves.append(output)
+                    metric = param.split('-')[1].upper()
+                    fig = go.Figure(traces)
+                    fig.update_layout(title=f'{self.backtest_months} Month Backtest - {metric}',
+                                      xaxis=dict(title='Month Since First Disbursement'),
+                                      yaxis=dict(title=param))
 
-                    # append forecast
-                    output = c_data[c_data.data_type == 'forecast'][param]
-                    output.name = cohort + '-forecast'
+                    if show:
+                        fig.show()
 
-                    curves.append(output)
-
-            elif data == 'clean':
-                for cohort in self.data.cohort.unique():
-                    output = self.data[self.data.cohort == cohort][param]
-
-                    output.name = cohort
-
-                    curves.append(output)
-
-            elif data == 'raw':
-                for cohort in self.raw.cohort.unique():
-                    output = self.raw[self.raw.cohort == cohort][param]
-
-                    output.name = cohort
-
-                    curves.append(output)
-
-            traces = []
-
-            for cohort in curves:
-                if 'forecast' in cohort.name:
-                    traces.append(go.Scatter(name=cohort.name, x=cohort.index, y=cohort, mode='lines',
-                                             line=dict(width=3, dash='dash')))
-                else:
-                    if cohort.notnull().any():
-                        traces.append(go.Scatter(name=cohort.name, x=cohort.index, y=cohort, mode='markers+lines',
-                                                 line=dict(width=2)))
-
-            fig = go.Figure(traces)
-            fig.update_layout(title=f'{param} - {data.upper()}',
-                              xaxis=dict(title='Month Since First Disbursement'),
-                              yaxis=dict(title=param))
-
-            if show:
-                fig.show()
-
-            return fig
-
-        elif data == 'backtest_report':
-            curves = []
-            for cohort in self.backtest_report.cohort.unique():
-                c_data = self.backtest_report[self.backtest_report.cohort == cohort]
-                output = c_data[param]
-
-                output.name = cohort
-
-                curves.append(output)
-
-            traces = []
-            for cohort in curves:
-                traces.append(go.Bar(name=cohort.name, x=cohort.index, y=cohort))
-
-            # add a line showing the overall mean
-            mean_df = pd.DataFrame(float(self.backtest_report[param].mean()),
-                                   index=self.backtest_report.index, columns=['mean'])
-            traces.append(go.Scatter(name='mean', x=mean_df.index, y=mean_df['mean'], mode='lines'))
-
-            metric = param.split('-')[1].upper()
-            fig = go.Figure(traces)
-            fig.update_layout(title=f'{self.backtest_months} Month Backtest - {metric}',
-                                  xaxis=dict(title='Month Since First Disbursement'),
-                                  yaxis=dict(title=param))
-
-            if show:
-                fig.show()
-
-            return fig
+                    return fig
