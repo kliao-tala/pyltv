@@ -563,112 +563,125 @@ class DataManager:
             If True, prints out the figure. If False, returns the figure object without
             rendering it.
         """
-        # print message about what data is available to plot
+        # print message about what datasets are available to plot
         if dataset != 'raw' and dataset != 'clean' and dataset != 'forecast' and dataset != 'backtest' \
                 and dataset != 'backtest_report':
             print('Dataset must be one of the following: ')
             print('raw, clean, forecast, backtest, backtest_report')
 
         else:
-
+            # print message if data has not been forecast or backtested yet
             if (dataset == 'forecast' or dataset == 'backtest' or dataset == 'backtest_report') and \
                     self.__getattribute__(dataset) is None:
                 print("Data has not been forecast or backtested yet.")
                 print('Run forecast_data() or backtest_data() methods first.')
 
             else:
-                if dataset == 'clean' or dataset == 'raw' or dataset == 'forecast' or dataset == 'backtest':
-                    curves = []
+                # check that specified param exists in dataset
+                if dataset == 'clean':
+                    check = 'data'
+                else:
+                    check = dataset
 
-                    if dataset == 'forecast':
-                        for cohort in self.forecast.cohort.unique():
-                            c_data = self.forecast[self.forecast.cohort == cohort]
-                            for dtype in c_data.data_type.unique():
-                                output = c_data[c_data.data_type == dtype][param]
+                if param not in self.__getattribute__(check).columns:
+                    print('Not a valid parameter name! Available params:')
+                    print('')
+                    print(self.__getattribute__(check).columns)
 
-                                output.name = cohort + '-' + dtype
+                # generate plots according to dataset
+                else:
+                    if dataset == 'clean' or dataset == 'raw' or dataset == 'forecast' or dataset == 'backtest':
+                        curves = []
+
+                        if dataset == 'forecast':
+                            for cohort in self.forecast.cohort.unique():
+                                c_data = self.forecast[self.forecast.cohort == cohort]
+                                for dtype in c_data.data_type.unique():
+                                    output = c_data[c_data.data_type == dtype][param]
+
+                                    output.name = cohort + '-' + dtype
+
+                                    curves.append(output)
+
+                        elif dataset == 'backtest':
+                            for cohort in self.backtest.cohort.unique():
+                                c_data = self.backtest[self.backtest.cohort == cohort]
+
+                                # append raw data
+                                output = self.data[self.data.cohort == cohort][param]
+                                output.name = cohort + '-actual'
 
                                 curves.append(output)
 
-                    elif dataset == 'backtest':
-                        for cohort in self.backtest.cohort.unique():
-                            c_data = self.backtest[self.backtest.cohort == cohort]
+                                # append forecast
+                                output = c_data[c_data.data_type == 'forecast'][param]
+                                output.name = cohort + '-forecast'
 
-                            # append raw data
-                            output = self.data[self.data.cohort == cohort][param]
-                            output.name = cohort + '-actual'
+                                curves.append(output)
 
-                            curves.append(output)
+                        elif dataset == 'clean':
+                            for cohort in self.data.cohort.unique():
+                                output = self.data[self.data.cohort == cohort][param]
 
-                            # append forecast
-                            output = c_data[c_data.data_type == 'forecast'][param]
-                            output.name = cohort + '-forecast'
+                                output.name = cohort
 
-                            curves.append(output)
+                                curves.append(output)
 
-                    elif dataset == 'clean':
-                        for cohort in self.data.cohort.unique():
-                            output = self.data[self.data.cohort == cohort][param]
+                        elif dataset == 'raw':
+                            for cohort in self.raw.cohort.unique():
+                                output = self.raw[self.raw.cohort == cohort][param]
+
+                                output.name = cohort
+
+                                curves.append(output)
+
+                        traces = []
+
+                        for cohort in curves:
+                            if 'forecast' in cohort.name:
+                                traces.append(go.Scatter(name=cohort.name, x=cohort.index, y=cohort, mode='lines',
+                                                         line=dict(width=3, dash='dash')))
+                            else:
+                                if cohort.notnull().any():
+                                    traces.append(go.Scatter(name=cohort.name, x=cohort.index, y=cohort,
+                                                             mode='markers+lines', line=dict(width=2)))
+
+                        fig = go.Figure(traces)
+                        fig.update_layout(title=f'{param} - {dataset.upper()}',
+                                          xaxis=dict(title='Month Since First Disbursement'),
+                                          yaxis=dict(title=param))
+
+                        if show:
+                            fig.show()
+
+                        return fig
+
+                    elif dataset == 'backtest_report':
+                        curves = []
+                        for cohort in self.backtest_report.cohort.unique():
+                            c_data = self.backtest_report[self.backtest_report.cohort == cohort]
+                            output = c_data[param]
 
                             output.name = cohort
 
                             curves.append(output)
 
-                    elif dataset == 'raw':
-                        for cohort in self.raw.cohort.unique():
-                            output = self.raw[self.raw.cohort == cohort][param]
+                        traces = []
+                        for cohort in curves:
+                            traces.append(go.Bar(name=cohort.name, x=cohort.index, y=cohort))
 
-                            output.name = cohort
+                        # add a line showing the overall mean
+                        mean_df = pd.DataFrame(float(self.backtest_report[param].mean()),
+                                               index=self.backtest_report.index, columns=['mean'])
+                        traces.append(go.Scatter(name='mean', x=mean_df.index, y=mean_df['mean'], mode='lines'))
 
-                            curves.append(output)
+                        metric = param.split('-')[1].upper()
+                        fig = go.Figure(traces)
+                        fig.update_layout(title=f'{self.backtest_months} Month Backtest - {metric}',
+                                          xaxis=dict(title='Month Since First Disbursement'),
+                                          yaxis=dict(title=param))
 
-                    traces = []
+                        if show:
+                            fig.show()
 
-                    for cohort in curves:
-                        if 'forecast' in cohort.name:
-                            traces.append(go.Scatter(name=cohort.name, x=cohort.index, y=cohort, mode='lines',
-                                                     line=dict(width=3, dash='dash')))
-                        else:
-                            if cohort.notnull().any():
-                                traces.append(go.Scatter(name=cohort.name, x=cohort.index, y=cohort,
-                                                         mode='markers+lines', line=dict(width=2)))
-
-                    fig = go.Figure(traces)
-                    fig.update_layout(title=f'{param} - {dataset.upper()}',
-                                      xaxis=dict(title='Month Since First Disbursement'),
-                                      yaxis=dict(title=param))
-
-                    if show:
-                        fig.show()
-
-                    return fig
-
-                elif dataset == 'backtest_report':
-                    curves = []
-                    for cohort in self.backtest_report.cohort.unique():
-                        c_data = self.backtest_report[self.backtest_report.cohort == cohort]
-                        output = c_data[param]
-
-                        output.name = cohort
-
-                        curves.append(output)
-
-                    traces = []
-                    for cohort in curves:
-                        traces.append(go.Bar(name=cohort.name, x=cohort.index, y=cohort))
-
-                    # add a line showing the overall mean
-                    mean_df = pd.DataFrame(float(self.backtest_report[param].mean()),
-                                           index=self.backtest_report.index, columns=['mean'])
-                    traces.append(go.Scatter(name='mean', x=mean_df.index, y=mean_df['mean'], mode='lines'))
-
-                    metric = param.split('-')[1].upper()
-                    fig = go.Figure(traces)
-                    fig.update_layout(title=f'{self.backtest_months} Month Backtest - {metric}',
-                                      xaxis=dict(title='Month Since First Disbursement'),
-                                      yaxis=dict(title=param))
-
-                    if show:
-                        fig.show()
-
-                    return fig
+                        return fig

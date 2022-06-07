@@ -3,7 +3,6 @@
   <component name="ChangeListManager">
     <list default="true" id="43d7f66b-c6bf-4754-a5d7-daa632b12ee7" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pyltv/Finance LTV Reporting.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/pyltv/Finance LTV Reporting.ipynb" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pyltv/Sandbox.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/pyltv/Sandbox.ipynb" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pyltv/model.py" beforeDir="false" afterPath="$PROJECT_DIR$/pyltv/model.py" afterDir="false" />
     </list>
