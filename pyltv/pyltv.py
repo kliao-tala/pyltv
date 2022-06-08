@@ -982,10 +982,10 @@ class Model:
                 error = np.mean(forecast[:len(actual)] - actual)
             # mean absolute percent error
             elif metric == 'mape':
-                error = round(100 * (1 / len(actual)) * sum(abs((forecast[:len(actual)] - actual) / actual)), 2)
+                error = round((1 / len(actual)) * sum(abs((forecast[:len(actual)] - actual) / actual)), 2)
             # mean percent error
             elif metric == 'mpe':
-                error = round(100 * (1 / len(actual)) * sum((forecast[:len(actual)] - actual) / actual), 2)
+                error = round((1 / len(actual)) * sum((forecast[:len(actual)] - actual) / actual), 2)
             return error
 
         # --- Generate backtest data --- #

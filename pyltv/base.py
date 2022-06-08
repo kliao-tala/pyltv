@@ -365,8 +365,8 @@ class DataManager:
 
     def __init__(self, data, market, to_usd=True, bake_duration=4):
         """
-        Sets model attributes, loads additional data required for models (inputs &
-        ltv_expected), and cleans data.
+        Sets model attributes, loads additional data required (recovery rates), cleans
+        data and generates features.
 
         Parameters
         ----------
@@ -677,9 +677,15 @@ class DataManager:
 
                         metric = param.split('-')[1].upper()
                         fig = go.Figure(traces)
+
+                        if 'mpe' in param or 'mape' in param:
+                            y_format = dict(title=param, tickformat=".2%")
+                        else:
+                            y_format = dict(title=param)
+
                         fig.update_layout(title=f'{self.backtest_months} Month Backtest - {metric}',
                                           xaxis=dict(title='Month Since First Disbursement'),
-                                          yaxis=dict(title=param))
+                                          yaxis=y_format)
 
                         if show:
                             fig.show()
