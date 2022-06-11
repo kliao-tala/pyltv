@@ -6,7 +6,8 @@
       <change beforePath="$PROJECT_DIR$/pyltv/Finance LTV Reporting.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/pyltv/Finance LTV Reporting.ipynb" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pyltv/Rolling Forecast Methodology for Default Rates.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/pyltv/Rolling Forecast Methodology for Default Rates.ipynb" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pyltv/Sandbox.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/pyltv/Sandbox.ipynb" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pyltv/model.py" beforeDir="false" afterPath="$PROJECT_DIR$/pyltv/base.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pyltv/base.py" beforeDir="false" afterPath="$PROJECT_DIR$/pyltv/base.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pyltv/config.py" beforeDir="false" afterPath="$PROJECT_DIR$/pyltv/config.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pyltv/pyltv.py" beforeDir="false" afterPath="$PROJECT_DIR$/pyltv/pyltv.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pyltv/pyltv2.py" beforeDir="false" afterPath="$PROJECT_DIR$/pyltv/pyltv2.py" afterDir="false" />
     </list>

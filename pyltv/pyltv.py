@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 from scipy.optimize import curve_fit, minimize
 from sbg import s, log_likelihood
+from config import config
 
 # plotting
 from plotly import graph_objects as go
@@ -393,19 +394,19 @@ class Model:
                cohort_data['default_rate_365dpd']
 
     def opex_per_original(self, cohort_data):
-        opex_cost_per_loan = float(self.inputs.loc[self.market, 'opex cost per loan'])
-        cost_of_capital = float(self.inputs.loc[self.market, 'cost of capital']) / 12
+        opex_cost_per_loan = float(config['opex_cpl'][self.market])
+        cost_of_capital = float(config['opex_coc'][self.market]) / 12
 
         return opex_cost_per_loan * cohort_data['loans_per_original'] + \
                cost_of_capital * cohort_data['origination_per_original']
 
     def opex_coc_per_original(self, cohort_data):
-        cost_of_capital = float(self.inputs.loc[self.market, 'cost of capital']) / 12
+        cost_of_capital = float(config['opex_coc'][self.market]) / 12
 
         return cost_of_capital * cohort_data['origination_per_original']
 
     def opex_cpl_per_original(self, cohort_data):
-        opex_cost_per_loan = float(self.inputs.loc[self.market, 'opex cost per loan'])
+        opex_cost_per_loan = float(config['opex_cpl'][self.market])
 
         return opex_cost_per_loan * cohort_data['loans_per_original']
 

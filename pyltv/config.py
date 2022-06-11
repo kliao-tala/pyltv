@@ -18,7 +18,7 @@ config = {
         'ph': 1.08,
         'mx': 1.37
     },
-    'coc': {  # cost of capital
+    'opex_coc': {  # cost of capital
         'ke': .13,
         'ph': .13,
         'mx': .13

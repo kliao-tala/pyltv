@@ -234,7 +234,7 @@ def opex_per_original(cohort_data, market):
     opex_per_original : pandas Series
     """
     opex_cost_per_loan = float(config['opex_cpl'][market])
-    cost_of_capital = float(config['coc'][market]) / 12
+    cost_of_capital = float(config['opex_coc'][market]) / 12
 
     total_opex = opex_cost_per_loan * cohort_data['loans_per_original'] + \
         (cost_of_capital * cohort_data['origination_per_original'])
@@ -258,7 +258,7 @@ def opex_coc_per_original(cohort_data, market):
     -------
     opex_coc_per_original : pandas Series
     """
-    cost_of_capital = float(config['coc'][market]) / 12
+    cost_of_capital = float(config['opex_coc'][market]) / 12
 
     return cost_of_capital * cohort_data['origination_per_original']
 
