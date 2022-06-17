@@ -2,14 +2,19 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="43d7f66b-c6bf-4754-a5d7-daa632b12ee7" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/pyltv/forecast.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/pyltv/pyltv-archive.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pyltv/Finance LTV Reporting.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/pyltv/Finance LTV Reporting.ipynb" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pyltv/2020-09.csv" beforeDir="false" afterPath="$PROJECT_DIR$/pyltv/2020-09.csv" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pyltv/MX Backtest.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/pyltv/MX Backtest.ipynb" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pyltv/Optimizing pyLTV for MX.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/pyltv/Optimizing pyLTV for MX.ipynb" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pyltv/Rolling Forecast Methodology for Default Rates.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/pyltv/Rolling Forecast Methodology for Default Rates.ipynb" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pyltv/Sandbox.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/pyltv/Sandbox.ipynb" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pyltv/base.py" beforeDir="false" afterPath="$PROJECT_DIR$/pyltv/base.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pyltv/config.py" beforeDir="false" afterPath="$PROJECT_DIR$/pyltv/config.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pyltv/archive/pLTV Python Model Build.ipynb" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/pyltv/base.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/pyltv/pLTV Monitoring.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/pyltv/pLTV Monitoring.ipynb" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pyltv/pyltv.py" beforeDir="false" afterPath="$PROJECT_DIR$/pyltv/pyltv.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pyltv/pyltv2.py" beforeDir="false" afterPath="$PROJECT_DIR$/pyltv/pyltv2.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pyltv/pyltv2.py" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -25,6 +30,14 @@
   </component>
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="GitSEFilterConfiguration">
+    <file-type-list>
+      <filtered-out-file-type name="LOCAL_BRANCH" />
+      <filtered-out-file-type name="REMOTE_BRANCH" />
+      <filtered-out-file-type name="TAG" />
+      <filtered-out-file-type name="COMMIT_BY_MESSAGE" />
+    </file-type-list>
   </component>
   <component name="MarkdownSettingsMigration">
     <option name="stateVersion" value="1" />
