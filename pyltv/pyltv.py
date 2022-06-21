@@ -647,9 +647,15 @@ class DataManager:
                                                              mode='markers+lines', line=dict(width=2)))
 
                         fig = go.Figure(traces)
+
+                        if 'default' in param:
+                            y_format = dict(title=param, tickformat=".2%")
+                        else:
+                            y_format = dict(title=param)
+
                         fig.update_layout(title=f'{param} - {dataset.upper()}',
                                           xaxis=dict(title='Month Since First Disbursement'),
-                                          yaxis=dict(title=param))
+                                          yaxis=y_format)
 
                         if show:
                             fig.show()
@@ -678,7 +684,7 @@ class DataManager:
                         metric = param.split('-')[1].upper()
                         fig = go.Figure(traces)
 
-                        if 'mpe' in param or 'mape' in param:
+                        if 'mpe' in param or 'mape' in param or 'default' in param:
                             y_format = dict(title=param, tickformat=".2%")
                         else:
                             y_format = dict(title=param)
