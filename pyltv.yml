@@ -12,3 +12,4 @@ dependencies:
   - snowflake-connector-python
   - statsmodels
   - pmdarima
+  - snowflake-connector-python[pandas]

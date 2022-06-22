@@ -684,7 +684,7 @@ class DataManager:
                         metric = param.split('-')[1].upper()
                         fig = go.Figure(traces)
 
-                        if 'mpe' in param or 'mape' in param or 'default' in param:
+                        if 'mpe' in param or 'mape' in param or 'default' in param or 'retention' in param:
                             y_format = dict(title=param, tickformat=".2%")
                         else:
                             y_format = dict(title=param)
