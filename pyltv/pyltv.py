@@ -17,8 +17,8 @@ pio.templates.default = "plotly_white"
 # --- DATA FUNCTIONS --- #
 def borrower_retention(cohort_data):
     """
-    Computes borrower retention from Count Borrowers. At each time period,
-    retention is simply Count Borrowers divided by the original cohort size.
+    Computes borrower retention from count_borrowers. At each time period,
+    retention is simply count_borrowers divided by the original cohort size.
 
     Parameters
     ----------
@@ -29,15 +29,15 @@ def borrower_retention(cohort_data):
     -------
     borrower_retention : pandas Series
     """
-    return cohort_data['Count Borrowers'] / cohort_data['Count Borrowers'].max()
+    return cohort_data['count_borrowers'] / cohort_data['count_borrowers'].max()
 
 
 def borrower_survival(cohort_data):
     """
-    Computes borrower survival from Count Borrowers. At each time period,
+    Computes borrower survival from count_borrowers. At each time period,
     survival is equal to borrower_retention divided by borrower_retention
-    in the previous period. This is equivalent to Count Borrowers divided
-    by Count Borrowers in the previous period.
+    in the previous period. This is equivalent to count_borrowers divided
+    by count_borrowers in the previous period.
 
     Parameters
     ----------
@@ -64,7 +64,7 @@ def loans_per_borrower(cohort_data):
     -------
     loans_per_borrower : pandas Series
     """
-    return cohort_data['Count Loans'] / cohort_data['Count Borrowers']
+    return cohort_data['count_loans'] / cohort_data['count_borrowers']
 
 
 def loan_size(cohort_data):
@@ -80,7 +80,7 @@ def loan_size(cohort_data):
     -------
     loan_size : pandas Series
     """
-    return cohort_data['Total Amount'] / cohort_data['Count Loans']
+    return cohort_data['total_amount'] / cohort_data['count_loans']
 
 
 def interest_rate(cohort_data):
@@ -96,7 +96,7 @@ def interest_rate(cohort_data):
     -------
     interest_rate : pandas Series
     """
-    return cohort_data['Total Interest Assessed'] / cohort_data['Total Amount']
+    return cohort_data['total_interest_assessed'] / cohort_data['total_amount']
 
 
 def default_rate(cohort_data, market, recovery_rates, dpd=7):
@@ -123,21 +123,21 @@ def default_rate(cohort_data, market, recovery_rates, dpd=7):
     default_rate : pandas Series
     """
     if dpd == 7:
-        return cohort_data['Default Rate Amount 7D']
+        return cohort_data['default_rate_amount_7d']
 
     elif dpd == 51:
-        dr = cohort_data['Default Rate Amount 51D'].copy()
+        dr = cohort_data['default_rate_amount_51d'].copy()
 
         recovery_rate_30 = float(recovery_rates.loc[market, 'recovery_7-30'])
         recovery_rate_51 = float(recovery_rates.loc[market, 'recovery_30-51'])
-        derived_30dpd = cohort_data['Default Rate Amount 7D']*(1-recovery_rate_30)
+        derived_30dpd = cohort_data['default_rate_amount_7d']*(1-recovery_rate_30)
         derived_51dpd = derived_30dpd * (1-recovery_rate_51)
 
         return dr.fillna(derived_51dpd)
 
     elif dpd == 365:
         # get actual cohort_data if it exists
-        dr = np.nan * cohort_data['Default Rate Amount 51D'].copy()
+        dr = np.nan * cohort_data['default_rate_amount_51d'].copy()
 
         recovery_rate_365 = float(recovery_rates.loc[market, 'recovery_51_'])
 
@@ -159,7 +159,7 @@ def loans_per_original(cohort_data):
     -------
     loans_per_original : pandas Series
     """
-    return cohort_data['Count Loans'] / cohort_data['Count Borrowers'].max()
+    return cohort_data['count_loans'] / cohort_data['count_borrowers'].max()
 
 
 def origination_per_original(cohort_data):
@@ -297,7 +297,7 @@ def ltv_per_original(cohort_data):
     -------
     ltv_per_original : pandas Series
     """
-    return cohort_data['cm$_per_original'] - cohort_data['opex_per_original']
+    return cohort_data['crm_per_original'] - cohort_data['opex_per_original']
 
 
 def dcf_ltv_per_original(cohort_data):
@@ -417,26 +417,26 @@ class DataManager:
         self.data.columns = [c.strip() for c in self.data.columns]
 
         # rename any columns with mismatching names
-        self.data = self.data.rename(columns={'First Loan Disbursement Month': 'First Loan Local Disbursement Month',
-                                              'Total Principal Amount': 'Total Amount',
-                                              'Default Rate Amount 7d': 'Default Rate Amount 7D',
-                                              'Default Rate Amount 51d': 'Default Rate Amount 51D',
-                                              'Default Rate Amount 30d': 'Default Rate Amount 30D'})
+        self.data = self.data.rename(columns={'First Loan Disbursement Month': 'first_loan_local_disbursement_month',
+                                              'Total Principal Amount': 'total_amount',
+                                              'default_rate_amount_7d': 'default_rate_amount_7d',
+                                              'default_rate_amount_51d': 'default_rate_amount_51d',
+                                              'default_rate_amount_30d': 'default_rate_amount_30d'})
 
         # add a leading 0 to the month if there isn't one already to match rest of the data
-        for date in self.data['First Loan Local Disbursement Month'].unique():
+        for date in self.data['first_loan_local_disbursement_month'].unique():
             if len(date) < 7:
                 year, month = date.split('-')
                 month = '0' + month
                 self.data = self.data.replace({date: year + '-' + month})
 
         # convert cols to appropriate datatypes
-        int_cols = ['Count Borrowers',
-                    'Count Loans',
-                    'Total Amount',
-                    'Total Interest Assessed',
-                    'Total Rollover Charged',
-                    'Total Rollover Reversed']
+        int_cols = ['count_borrowers',
+                    'count_loans',
+                    'total_amount',
+                    'total_interest_assessed',
+                    'total_rollover_charged',
+                    'total_rollover_reversed']
         for col in int_cols:
             try:
                 self.data[col] = pd.to_numeric(self.data[col].str.replace(',', ''))
@@ -444,29 +444,29 @@ class DataManager:
                 self.data[col] = pd.to_numeric(self.data[col])
 
         # convert month since disbursement to int
-        if self.data['Months Since First Loan Disbursed'].dtype == 'O':
-            self.data['Months Since First Loan Disbursed'] = self.data['Months Since First Loan Disbursed'].apply(
+        if self.data['months_since_first_loan_disbursed'].dtype == 'O':
+            self.data['months_since_first_loan_disbursed'] = self.data['months_since_first_loan_disbursed'].apply(
                 lambda x: int(x.split(' ')[0]))
 
         # drop any negative months since first loan
-        self.data = self.data[~self.data['Months Since First Loan Disbursed'] < 0]
+        self.data = self.data[~self.data['months_since_first_loan_disbursed'] < 0]
 
         # sort by months since first disbursement
-        self.data = self.data.sort_values(['First Loan Local Disbursement Month',
-                                           'Months Since First Loan Disbursed'])
+        self.data = self.data.sort_values(['first_loan_local_disbursement_month',
+                                           'months_since_first_loan_disbursed'])
 
         # remove all columns calculated through looker
-        self.data = self.data.loc[:, :"Default Rate Amount 51D"]
+        self.data = self.data.loc[:, :"default_rate_amount_51d"]
 
         # add more convenient cohort label column
-        self.data['cohort'] = self.data['First Loan Local Disbursement Month']
+        self.data['cohort'] = self.data['first_loan_local_disbursement_month']
 
         # convert local currency to USD
         if self.to_usd:
-            self.data['Total Amount'] /= config['forex'][self.market]
-            self.data['Total Interest Assessed'] /= config['forex'][self.market]
-            self.data['Total Rollover Charged'] /= config['forex'][self.market]
-            self.data['Total Rollover Reversed'] /= config['forex'][self.market]
+            self.data['total_amount'] /= config['forex'][self.market]
+            self.data['total_interest_assessed'] /= config['forex'][self.market]
+            self.data['total_rollover_charged'] /= config['forex'][self.market]
+            self.data['total_rollover_reversed'] /= config['forex'][self.market]
 
         # save raw data df before removing data for forecast
         self.raw = self.data.copy()
@@ -524,8 +524,8 @@ class DataManager:
             cohort_data['cumulative_origination_per_original'] = cohort_data['origination_per_original'].cumsum()
             cohort_data['revenue_per_original'] = revenue_per_original(cohort_data)
             cohort_data['cumulative_revenue_per_original'] = cohort_data['revenue_per_original'].cumsum()
-            cohort_data['cm$_per_original'] = credit_margin(cohort_data)
-            cohort_data['cumulative_cm$_per_original'] = cohort_data['cm$_per_original'].cumsum()
+            cohort_data['crm_per_original'] = credit_margin(cohort_data)
+            cohort_data['cumulative_crm_per_original'] = cohort_data['crm_per_original'].cumsum()
             cohort_data['opex_per_original'] = opex_per_original(cohort_data, self.market)
             cohort_data['cumulative_opex_per_original'] = cohort_data['opex_per_original'].cumsum()
             cohort_data['opex_coc_per_original'] = opex_coc_per_original(cohort_data, self.market)
@@ -536,7 +536,7 @@ class DataManager:
             cohort_data['cumulative_ltv_per_original'] = cohort_data['ltv_per_original'].cumsum()
             cohort_data['dcf_ltv_per_original'] = dcf_ltv_per_original(cohort_data)
             cohort_data['cumulative_dcf_ltv_per_original'] = cohort_data['dcf_ltv_per_original'].cumsum()
-            cohort_data['cm%_per_original'] = credit_margin_percent(cohort_data)
+            cohort_data['crm_perc_per_original'] = credit_margin_percent(cohort_data)
 
             cohort_dfs.append(cohort_data)
 

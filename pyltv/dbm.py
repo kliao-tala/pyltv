@@ -6,6 +6,8 @@
 # -----------------------------------------------------------------
 import pandas as pd
 import snowflake.connector
+from sqlalchemy import create_engine
+from snowflake.sqlalchemy import URL
 
 # for private key handling
 from cryptography.hazmat.backends import default_backend
@@ -35,12 +37,13 @@ class DBM:
         self.warehouse = warehouse
         self.ctx = None
         self.data = None
+        self.engine = None
 
         # get private key
         pkey = self.get_private_key_bytes(f'/Users/{self.user}/.ssh/snowflake_private_keypair.pem', None)
 
         # connect to snowflake
-        self.connect(pkey)
+        self.create_engine(pkey)
 
     def get_private_key_bytes(self, keyfile, keypass):
         """
@@ -87,6 +90,20 @@ class DBM:
             warehouse=self.warehouse
         )
 
+    def create_engine(self, pkey, database='BUSINESS_DB', schema='FINANCE_TEST'):
+
+        self.engine = create_engine(URL(
+            account=f'{self.account}',
+            user=f'{self.user}@tala.co',
+            warehouse=self.warehouse,
+            database=database,
+            schema=schema
+            ),
+            connect_args={
+                'private_key': pkey,
+            }
+        )
+
     def run_sql(self, sql_file_path=None):
         """
         Run a sql query saved at sql_file_path.
@@ -102,18 +119,16 @@ class DBM:
                 results = curs.execute(query)
                 return pd.DataFrame.from_records(iter(results), columns=[c[0] for c in results.description])
 
-    def query_db(self, query):
-        """
-        Query snowflake with the specified sql query.
-
-        Parameters
-        ----------
-        query : str
-            sql query statement
-        """
-        with self.ctx.cursor() as curs:
-            results = curs.execute(query)
-            return pd.DataFrame.from_records(iter(results), columns=[c[0] for c in results.description])
+    # def query_db(self, query):
+    #     """
+    #     Query snowflake with the specified sql query.
+    #
+    #     Parameters
+    #     ----------
+    #     query : str
+    #         sql query statement
+    #     """
+    #     return pd.read_sql_query(query)
 
     def get_market_data(self, market='ke', start_date='2020-09-01', days_before=0):
         """
@@ -159,10 +174,10 @@ class DBM:
             for p in query_params:
                 sql = sql.replace(p, query_params[p])
 
-        data = self.query_db(sql)
+        df = pd.read_sql_query(sql, self.engine)
 
-        data.columns = cols
+        # remove tablename from column names
+        new_col_names = [c.split('.')[1] for c in df.columns]
+        df.columns = new_col_names
 
-        self.data = data
-
-        return data
+        return df
