@@ -128,22 +128,42 @@ def default_rate(cohort_data, market, recovery_rates, dpd=7):
     elif dpd == 51:
         dr = cohort_data['default_rate_amount_51d'].copy()
 
-        recovery_rate_30 = float(recovery_rates.loc[market, 'recovery_7-30'])
-        recovery_rate_51 = float(recovery_rates.loc[market, 'recovery_30-51'])
-        derived_30dpd = cohort_data['default_rate_amount_7d']*(1-recovery_rate_30)
-        derived_51dpd = derived_30dpd * (1-recovery_rate_51)
+        # determine if dpd 51 dr is baked. dpd 51 dr requires 2 additional months to bake
+        final_month = len(cohort_data)
 
-        return dr.fillna(derived_51dpd)
+        # iterate through each month of data
+        for month in cohort_data.index:
+
+            # if the current month is within 5 months of the last month of data (not baked)
+            if month > final_month - 3:
+
+                # derive dr based on recovery rate for the given month
+                recovery_rate_51 = float(recovery_rates[recovery_rates.month == month].loc[market, 'recovery_30-51'])
+
+                derived_51dpd = cohort_data['default_rate_amount_30d'] * (1-recovery_rate_51)
+
+                dr.loc[month] = derived_51dpd.loc[month]
+
+        return dr
 
     elif dpd == 365:
-        # get actual cohort_data if it exists
-        dr = np.nan * cohort_data['default_rate_amount_51d'].copy()
 
-        recovery_rate_365 = float(recovery_rates.loc[market, 'recovery_51_'])
+        dr = cohort_data['default_rate_amount_365d'].copy()
 
-        derived_365dpd = cohort_data['default_rate_51dpd'] * (1-recovery_rate_365)
+        # determine if 365dpd dr is baked
+        final_month = len(cohort_data)
 
-        return dr.fillna(derived_365dpd)
+        for month in cohort_data.index:
+
+            if month > final_month - 12:
+
+                recovery_rate_365 = float(recovery_rates[recovery_rates.month == month].loc[market, 'recovery_51_'])
+
+                derived_365dpd = cohort_data['default_rate_51dpd'] * (1-recovery_rate_365)
+
+                dr.loc[month] = derived_365dpd.loc[month]
+
+        return dr
 
 
 def loans_per_original(cohort_data):
@@ -398,7 +418,7 @@ class DataManager:
 
         # clean data and generate features
         self.clean_data()
-        self.raw = self.generate_features(self.raw)
+        #self.raw = self.generate_features(self.raw)
         self.data = self.generate_features(self.data)
 
         # print the date range that the data spans
@@ -456,7 +476,7 @@ class DataManager:
                                            'months_since_first_loan_disbursed'])
 
         # remove all columns calculated through looker
-        self.data = self.data.loc[:, :"default_rate_amount_51d"]
+        self.data = self.data.loc[:, :"default_rate_amount_365d"]
 
         # add more convenient cohort label column
         self.data['cohort'] = self.data['first_loan_local_disbursement_month']
@@ -490,10 +510,10 @@ class DataManager:
             # this is to ensure default_rate_51dpd data is fully baked
             c_data = c_data.iloc[:-self.bake_duration]
 
-            # blank the last 2 data points in default rates to ensure data is baked
-            default_cols = [i for i in c_data.columns if 'default' in i]
-
-            c_data.loc[len(c_data) - 1:, default_cols] = np.nan
+            # # blank the last 2 data points in default rates to ensure data is baked
+            # default_cols = [i for i in c_data.columns if 'default' in i]
+            #
+            # c_data.loc[len(c_data) - 1:, default_cols] = np.nan
 
             cohort_data.append(c_data)
 

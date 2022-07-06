@@ -257,12 +257,19 @@ class AutoRegression(DataManager):
         # --- DEFAULT RATE FACTORS --- #
         # compute the default rate std dev across cohorts for the first 12 months
         default_std = self.data[['cohort', 'default_rate_7dpd']].copy()
-        default_std = default_std.set_index('cohort', append=True).unstack(-2).iloc[:, :12]
-        default_std = default_std.std()
+
+        # remove the last two months of data
+        default_dfs = []
+        for c in default_std.cohort.unique():
+            default_dfs.append(default_std[default_std.cohort == c].iloc[:-2])
+        default_std = pd.concat(default_dfs)
+
+        default_std = default_std.set_index('cohort', append=True).unstack(-2).iloc[:, :11]
+        default_std = default_std.iloc[:12].std()
         default_std.index = np.arange(1, len(default_std) + 1)
 
         def func(x, a, b):
-            return a * x ** b
+            return a * np.exp(b*x)
 
         params, covs = curve_fit(func, default_std.index, default_std)
 
@@ -276,6 +283,8 @@ class AutoRegression(DataManager):
         default_factors = []
         for c in self.data.cohort.unique():
             c_data = self.data[self.data.cohort == c]['default_rate_7dpd']
+            # remove the last 2 unbaked months
+            c_data = c_data.iloc[:-2]
 
             default_factors.append(np.mean((c_data - default_expected_7[:len(c_data)]) / default_std_fit[:len(c_data)]))
         default_factors = pd.Series(default_factors, index=self.data.cohort.unique())
@@ -319,7 +328,7 @@ class AutoRegression(DataManager):
             # 7DPD
             default_fcast = []
             for t in times:
-                if t < n_valid + 1:
+                if t < n_valid - 1:
                     default_fcast.append(c_data.loc[t, 'default_rate_7dpd'])
                 else:
                     default_fcast.append(default_expected_7[t] + default_factors[cohort] * default_std_fit[t])
@@ -330,7 +339,7 @@ class AutoRegression(DataManager):
             # 51DPD
             default_fcast = []
             for t in times:
-                if t < n_valid + 1:
+                if t < n_valid - 1:
                     default_fcast.append(c_data.loc[t, 'default_rate_51dpd'])
                 else:
                     default_fcast.append(default_expected_51[t] + default_factors[cohort] * default_std_fit[t])
@@ -341,7 +350,7 @@ class AutoRegression(DataManager):
             # 365DPD
             default_fcast = []
             for t in times:
-                if t < n_valid + 1:
+                if t < n_valid - 1:
                     default_fcast.append(c_data.loc[t, 'default_rate_365dpd'])
                 else:
                     default_fcast.append(default_expected_365[t] + default_factors[cohort] * default_std_fit[t])
@@ -378,9 +387,9 @@ class AutoRegression(DataManager):
             # add the forecasted data for the cohort to a list, aggregating all cohort forecasts
             forecast_dfs.append(c_data)
 
-        forecast_df = pd.concat(forecast_dfs)
+        # drop the last 2 cohorts since there's no forecast data
 
-        return forecast_df
+        return pd.concat(forecast_dfs[:-2])
 
     def backtest_data(self, data, min_months=4, hold_months=4, fcast_months=50, metrics=None,
                       retention_weights=(1, 1, 1)):
@@ -1592,12 +1601,19 @@ class PowerSlope(DataManager):
         # --- DEFAULT RATE FACTORS --- #
         # compute the default rate std dev across cohorts for the first 12 months
         default_std = self.data[['cohort', 'default_rate_7dpd']].copy()
-        default_std = default_std.set_index('cohort', append=True).unstack(-2).iloc[:, :12]
-        default_std = default_std.std()
+
+        # remove the last two months of data
+        default_dfs = []
+        for c in default_std.cohort.unique():
+            default_dfs.append(default_std[default_std.cohort == c].iloc[:-2])
+        default_std = pd.concat(default_dfs)
+
+        default_std = default_std.set_index('cohort', append=True).unstack(-2).iloc[:, :11]
+        default_std = default_std.iloc[:12].std()
         default_std.index = np.arange(1, len(default_std) + 1)
 
         def func(x, a, b):
-            return a * x ** b
+            return a * np.exp(b * x)
 
         params, covs = curve_fit(func, default_std.index, default_std)
 
@@ -1610,9 +1626,11 @@ class PowerSlope(DataManager):
 
         default_factors = []
         for c in self.data.cohort.unique():
-            c_data = self.data[self.data.cohort==c]['default_rate_7dpd']
+            c_data = self.data[self.data.cohort == c]['default_rate_7dpd']
+            # remove the last 2 unbaked months
+            c_data = c_data.iloc[:-2]
 
-            default_factors.append(np.mean((c_data - default_expected_7[:len(c_data)])/default_std_fit[:len(c_data)]))
+            default_factors.append(np.mean((c_data - default_expected_7[:len(c_data)]) / default_std_fit[:len(c_data)]))
         default_factors = pd.Series(default_factors, index=self.data.cohort.unique())
         # -------------------------------#
 
@@ -1738,7 +1756,7 @@ class PowerSlope(DataManager):
                 # 7DPD
                 default_fcast = []
                 for t in times:
-                    if t < n_valid+1:
+                    if t < n_valid - 1:
                         default_fcast.append(c_data.loc[t, 'default_rate_7dpd'])
                     else:
                         default_fcast.append(default_expected_7[t] + default_factors[cohort]*default_std_fit[t])
@@ -1749,7 +1767,7 @@ class PowerSlope(DataManager):
                 # 51DPD
                 default_fcast = []
                 for t in times:
-                    if t < n_valid+1:
+                    if t < n_valid - 1:
                         default_fcast.append(c_data.loc[t, 'default_rate_51dpd'])
                     else:
                         default_fcast.append(default_expected_51[t] + default_factors[cohort] * default_std_fit[t])
@@ -1760,7 +1778,7 @@ class PowerSlope(DataManager):
                 # 365DPD
                 default_fcast = []
                 for t in times:
-                    if t < n_valid+1:
+                    if t < n_valid - 1:
                         default_fcast.append(c_data.loc[t, 'default_rate_365dpd'])
                     else:
                         default_fcast.append(default_expected_365[t] + default_factors[cohort] * default_std_fit[t])
@@ -1796,7 +1814,7 @@ class PowerSlope(DataManager):
                 # add the forecasted data for the cohort to a list, aggregating all cohort forecasts
                 forecast_dfs.append(c_data)
 
-        forecast_df = pd.concat(forecast_dfs)
+        forecast_df = pd.concat(forecast_dfs[:-2])
 
         return forecast_df
 
