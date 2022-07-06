@@ -3,12 +3,7 @@
   <component name="ChangeListManager">
     <list default="true" id="43d7f66b-c6bf-4754-a5d7-daa632b12ee7" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pyltv/Rolling Forecast Methodology for Default Rates.ipynb" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pyltv/Sandbox.ipynb" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pyltv/[MX] pLTV Optimization and AutoRegression Model.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/pyltv/[MX] pLTV Optimization and AutoRegression Model.ipynb" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pyltv/[PH] AutoRegression Model.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/pyltv/[PH] AutoRegression Model.ipynb" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pyltv/dbm.py" beforeDir="false" afterPath="$PROJECT_DIR$/pyltv/dbm.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pyltv/models.py" beforeDir="false" afterPath="$PROJECT_DIR$/pyltv/models.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pyltv/[KE] AutoRegression Model for Low Tenure Cohorts.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/pyltv/[KE] AutoRegression Model for Low Tenure Cohorts.ipynb" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pyltv/pyltv.py" beforeDir="false" afterPath="$PROJECT_DIR$/pyltv/pyltv.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />

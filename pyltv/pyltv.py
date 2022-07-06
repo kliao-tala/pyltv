@@ -488,7 +488,14 @@ class DataManager:
 
             # remove the last "bake_duration" months of data for each cohort
             # this is to ensure default_rate_51dpd data is fully baked
-            cohort_data.append(c_data.iloc[:-self.bake_duration])
+            c_data = c_data.iloc[:-self.bake_duration]
+
+            # blank the last 2 data points in default rates to ensure data is baked
+            default_cols = [i for i in c_data.columns if 'default' in i]
+
+            c_data.loc[len(c_data) - 1:, default_cols] = np.nan
+
+            cohort_data.append(c_data)
 
         self.data = pd.concat(cohort_data, axis=0)
 
