@@ -119,16 +119,16 @@ class DBM:
                 results = curs.execute(query)
                 return pd.DataFrame.from_records(iter(results), columns=[c[0] for c in results.description])
 
-    # def query_db(self, query):
-    #     """
-    #     Query snowflake with the specified sql query.
-    #
-    #     Parameters
-    #     ----------
-    #     query : str
-    #         sql query statement
-    #     """
-    #     return pd.read_sql_query(query)
+    def query_db(self, query):
+        """
+        Query snowflake with the specified sql query.
+
+        Parameters
+        ----------
+        query : str
+            sql query statement
+        """
+        return pd.read_sql_query(query, self.engine)
 
     def get_market_data(self, market='ke', start_date='2020-09-01', days_before=0):
         """
@@ -146,21 +146,6 @@ class DBM:
         days_before : int
             the number of days, prior to the current date, to query date up until
         """
-
-        cols = ['First Loan Local Disbursement Month',
-                'Months Since First Loan Disbursed',
-                'Count First Loans',
-                'Count Borrowers',
-                'Count Loans',
-                'Total Amount',
-                'Total Interest Assessed',
-                'Total Rollover Charged',
-                'Total Rollover Reversed',
-                'Default Rate Amount 7D',
-                'Default Rate Amount 30D',
-                'Default Rate Amount 51D',
-                'Default Rate Amount 365D']
-
         if market != 'ke':
             query_params = {'REPLACE_DATE': start_date,
                             'REPLACE_DAYS': str(days_before),

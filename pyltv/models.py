@@ -32,7 +32,7 @@ class AutoRegression(DataManager):
         Number of months to consider data fully baked. The last bake_duration number
         of months is removed from the data during cleaning.
     """
-    def __init__(self, data, market, to_usd=True, bake_duration=4, ltv_expected=None):
+    def __init__(self, data, market, to_usd=True, ltv_expected=None):
         """
         Sets model attributes, loads additional data required for models (inputs &
         ltv_expected), and cleans data.
@@ -51,7 +51,7 @@ class AutoRegression(DataManager):
             Number of months to consider data fully baked. The last bake_duration number
             of months is removed from the data during cleaning.
         """
-        super().__init__(data, market, to_usd, bake_duration)
+        super().__init__(data, market, to_usd)
 
         if ltv_expected:
             self.ltv_expected = pd.read_csv(f'data/model_dependencies/{ltv_expected}')
@@ -354,6 +354,7 @@ class AutoRegression(DataManager):
                 c_data['default_rate_365dpd'] += self.default_stress
 
             # compute remaining columns from forecasts
+            c_data['total_interest_assessed'] = c_data['total_amount']*c_data['interest_rate']
             c_data['loans_per_original'] = loans_per_original(c_data)
             c_data['cumulative_loans_per_original'] = c_data['loans_per_original'].cumsum()
             c_data['origination_per_original'] = origination_per_original(c_data)
@@ -482,6 +483,15 @@ class AutoRegression(DataManager):
 
         return backtest, backtest_report
 
+    def output_forecast(self):
+        return self.forecast.drop(['total_rollover_charged',
+                                   'total_rollover_reversed',
+                                   'default_rate_amount_7d',
+                                   'default_rate_amount_30d',
+                                   'default_rate_amount_51d'],
+                                  axis=1
+                                  )
+
 
 # --- AUTO REGRESSION w DEFAULT EXPECTATIONS --- #
 class AutoRegression1(DataManager):
@@ -506,7 +516,7 @@ class AutoRegression1(DataManager):
         Number of months to consider data fully baked. The last bake_duration number
         of months is removed from the data during cleaning.
     """
-    def __init__(self, data, market, to_usd=True, bake_duration=4, ltv_expected=None):
+    def __init__(self, data, market, to_usd=True, ltv_expected=None):
         """
         Sets model attributes, loads additional data required for models (inputs &
         ltv_expected), and cleans data.
@@ -525,7 +535,7 @@ class AutoRegression1(DataManager):
             Number of months to consider data fully baked. The last bake_duration number
             of months is removed from the data during cleaning.
         """
-        super().__init__(data, market, to_usd, bake_duration)
+        super().__init__(data, market, to_usd)
 
         if ltv_expected:
             self.ltv_expected = pd.read_csv(f'data/model_dependencies/{ltv_expected}')
@@ -981,7 +991,7 @@ class AutoRegression2(DataManager):
         Number of months to consider data fully baked. The last bake_duration number
         of months is removed from the data during cleaning.
     """
-    def __init__(self, data, market, to_usd=True, bake_duration=4, ltv_expected=None):
+    def __init__(self, data, market, to_usd=True, ltv_expected=None):
         """
         Sets model attributes, loads additional data required for models (inputs &
         ltv_expected), and cleans data.
@@ -1000,7 +1010,7 @@ class AutoRegression2(DataManager):
             Number of months to consider data fully baked. The last bake_duration number
             of months is removed from the data during cleaning.
         """
-        super().__init__(data, market, to_usd, bake_duration)
+        super().__init__(data, market, to_usd)
 
         if ltv_expected:
             self.ltv_expected = pd.read_csv(f'data/model_dependencies/{ltv_expected}')
@@ -1089,7 +1099,7 @@ class AutoRegression2(DataManager):
                                 'expectations': []}
                            }
 
-        def forecast_defaults(data, dpd=7, n_months=50, asymptote=None, n_trail=4,
+        def forecast_defaults(data, dpd=7, n_months=50, asymptote=None,
                               weight_actuals=None, weight_tail=None):
             # set default rate name
             default_rate = f'default_rate_{dpd}dpd'
@@ -1190,8 +1200,8 @@ class AutoRegression2(DataManager):
 
         # Forecast default rates
         data = forecast_defaults(data=data, dpd=7, n_months=n_months, asymptote=0.0358,
-                                 weight_actuals=(.2, .75, 1),
-                                 weight_tail=(1, 1, .25, .1, .05, .05))
+                                 weight_actuals=(1, 1, 1, 1, 1),
+                                 weight_tail=(1, 1, 1, 1, 1))
         data = forecast_defaults(data=data, dpd=51, n_months=n_months, asymptote=0.0317,
                                  weight_actuals=(.5, .75, .75, 1),
                                  weight_tail=(1, 1, .25, .1, .05, .05))
@@ -1511,7 +1521,7 @@ class PowerSlope(DataManager):
         Number of months to consider data fully baked. The last bake_duration number
         of months is removed from the data during cleaning.
     """
-    def __init__(self, data, market, to_usd=True, bake_duration=4, ltv_expected=None):
+    def __init__(self, data, market, to_usd=True, ltv_expected=None):
         """
         Sets model attributes, loads additional data required for models (inputs &
         ltv_expected), and cleans data.
@@ -1530,7 +1540,7 @@ class PowerSlope(DataManager):
             Number of months to consider data fully baked. The last bake_duration number
             of months is removed from the data during cleaning.
         """
-        super().__init__(data, market, to_usd, bake_duration)
+        super().__init__(data, market, to_usd)
 
         if ltv_expected:
             self.ltv_expected = pd.read_csv(f'data/model_dependencies/{ltv_expected}')
