@@ -5,5 +5,8 @@ pyltv/data/
 env/
 .idea/
 
+# ignore all python notebooks
 *.ipynb
+
+# except these
 ![MX] AR2 Full Model.ipynb
