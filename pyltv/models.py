@@ -10,7 +10,7 @@ from scipy.signal import savgol_filter
 
 
 # --- AUTO REGRESSION: FULL MODEL --- #
-class AutoRegression(DataManager):
+class AutoRegression2(DataManager):
     """
     The AutoRegression model uses the same forecasting methodology as the PowerSlope model.
     The difference is in borrower_retention, borrower_survival, and count_borrowers for
@@ -553,7 +553,7 @@ class AutoRegression(DataManager):
 
 
 # --- AUTO REGRESSION: Low Tenure Retention Only--- #
-class AutoRegression2(DataManager):
+class AutoRegression(DataManager):
     """
     The AutoRegression model uses the same forecasting methodology as the PowerSlope model.
     The difference is in borrower_retention, borrower_survival, and count_borrowers for
