@@ -2,13 +2,11 @@ name: pyltv
 channels:
   - conda-forge
 dependencies:
+  - git
   - python=3.9
   - jupyter
   - numpy
   - pandas
-  - matplotlib
   - plotly
   - scipy
-  - statsmodels
-  - pmdarima
   - snowflake-sqlalchemy
