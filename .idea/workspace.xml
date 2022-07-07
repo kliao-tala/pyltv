@@ -2,8 +2,9 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="43d7f66b-c6bf-4754-a5d7-daa632b12ee7" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pyltv/models.py" beforeDir="false" afterPath="$PROJECT_DIR$/pyltv/models.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pyltv/[MX] AR2 Full Model.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/pyltv/[MX] AR2 Full Model.ipynb" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
