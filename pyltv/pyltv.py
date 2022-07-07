@@ -134,7 +134,7 @@ def default_rate(cohort_data, market, recovery_rates, dpd=7):
         # iterate through each month of data
         for month in cohort_data.index:
 
-            # if the current month is within 5 months of the last month of data (not baked)
+            # if the current month is within 5 months of the last month of data (not 51 dpd baked)
             if month > final_month - 3:
 
                 # derive dr based on recovery rate for the given month
@@ -143,6 +143,19 @@ def default_rate(cohort_data, market, recovery_rates, dpd=7):
                 derived_51dpd = cohort_data['default_rate_amount_30d'] * (1-recovery_rate_51)
 
                 dr.loc[month] = derived_51dpd.loc[month]
+
+                # if current month is within 4 months of the last month of data (not 30 dpd baked)
+                if month > final_month - 2:
+                    # derive dr based on recovery rate for the given month
+                    recovery_rate_7_30 = float(
+                        recovery_rates[recovery_rates.month == month].loc[market, 'recovery_7-30'])
+                    recovery_rate_51 = float(
+                        recovery_rates[recovery_rates.month == month].loc[market, 'recovery_30-51'])
+
+                    derived_30dpd = cohort_data['default_rate_amount_7d'] * (1 - recovery_rate_7_30)
+                    derived_51dpd = derived_30dpd * (1 - recovery_rate_51)
+
+                    dr.loc[month] = derived_51dpd.loc[month]
 
         return dr
 
