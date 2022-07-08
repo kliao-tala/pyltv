@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------------------------------------------
 # pyLTV Library
 #
-# This library defines a data manager class that allows data cleaning, feature generation, and plotting
+# This library defines a Data Manager class that allows data cleaning, feature generation, and plotting
 # functionality. Forecasting & backtesting models can be built on top of this base class.
 # -----------------------------------------------------------------------------------------------------------------
 import numpy as np
@@ -101,8 +101,12 @@ def interest_rate(cohort_data):
 
 def default_rate(cohort_data, market, recovery_rates, dpd=7):
     """
-    Default rate for a specified days past due (dpd). The 7dpd default rate is
-    taken as is from the raw LTV data and null values are filled in with 0.
+    Default rate for a specified days past due (dpd). 7dpd data is assumed to be baked.
+    During the data pull, only loans that were disbursed 60 days prior to the current
+    date are pulled, ensuring 7dpd default rates are baked. Where 51dpd or 365dpd data
+    is baked, it's taken as is. For unbaked data, 365dpd is derived from 51dpd, 51dpd
+    from 30dpd, and 30dpd from 7dpd using recovery rates. The recovery rates can be
+    found in the recovery_rates.csv file in data/model_dependencies/.
 
     Parameters
     ----------
@@ -175,6 +179,36 @@ def default_rate(cohort_data, market, recovery_rates, dpd=7):
                 derived_365dpd = cohort_data['default_rate_51dpd'] * (1-recovery_rate_365)
 
                 dr.loc[month] = derived_365dpd.loc[month]
+
+                # if the current month is within 5 months of the last month of data (not 51 dpd baked)
+                if month > final_month - 3:
+
+                    # derive dr based on recovery rate for the given month
+                    recovery_rate_51 = float(
+                        recovery_rates[recovery_rates.month == month].loc[market, 'recovery_30-51'])
+                    recovery_rate_365 = float(
+                        recovery_rates[recovery_rates.month == month].loc[market, 'recovery_51_'])
+
+                    derived_51dpd = cohort_data['default_rate_amount_30d'] * (1 - recovery_rate_51)
+                    derived_365dpd = derived_51dpd * (1 - recovery_rate_365)
+
+                    dr.loc[month] = derived_365dpd.loc[month]
+
+                    # if current month is within 4 months of the last month of data (not 30 dpd baked)
+                    if month > final_month - 2:
+                        # derive dr based on recovery rate for the given month
+                        recovery_rate_7_30 = float(
+                            recovery_rates[recovery_rates.month == month].loc[market, 'recovery_7-30'])
+                        recovery_rate_51 = float(
+                            recovery_rates[recovery_rates.month == month].loc[market, 'recovery_30-51'])
+                        recovery_rate_365 = float(
+                            recovery_rates[recovery_rates.month == month].loc[market, 'recovery_51_'])
+
+                        derived_30dpd = cohort_data['default_rate_amount_7d'] * (1 - recovery_rate_7_30)
+                        derived_51dpd = derived_30dpd * (1 - recovery_rate_51)
+                        derived_365dpd = derived_51dpd * (1 - recovery_rate_365)
+
+                        dr.loc[month] = derived_365dpd.loc[month]
 
         return dr
 
