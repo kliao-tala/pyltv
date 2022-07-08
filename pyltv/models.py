@@ -10,7 +10,7 @@ from scipy.signal import savgol_filter
 
 
 # --- AUTO REGRESSION: FULL MODEL --- #
-class AutoRegression2(DataManager):
+class AutoRegression(DataManager):
     """
     The AutoRegression model uses the same forecasting methodology as the PowerSlope model.
     The difference is in borrower_retention, borrower_survival, and count_borrowers for
@@ -245,7 +245,7 @@ class AutoRegression2(DataManager):
         # Forecast default rates
         asymptotes = {'mx': {7: .085, 51: .0525, 365: .0425},
                       'ph': {7: .06, 51: .04, 365: .035},
-                      'ke': {7: .085, 51: .0525, 365: .0425}}
+                      'ke': {7: .085, 51: .055, 365: .0425}}
 
         data = forecast_defaults(data=data, dpd=7, n_months=n_months,
                                  asymptote=asymptotes[self.market][7],
@@ -553,7 +553,7 @@ class AutoRegression2(DataManager):
 
 
 # --- AUTO REGRESSION: Low Tenure Retention Only--- #
-class AutoRegression(DataManager):
+class AutoRegressionLT(DataManager):
     """
     The AutoRegression model uses the same forecasting methodology as the PowerSlope model.
     The difference is in borrower_retention, borrower_survival, and count_borrowers for

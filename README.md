@@ -26,3 +26,6 @@ to forecast each data field. Each model class also contains a backtesting functi
 
 **config.py** contains various constants and model parameters required for some forecasting models. Values such as max
 survival, opex rates, and late fees can be specified here.
+
+# Documentation
+For the full documentation, visit the confluence page
