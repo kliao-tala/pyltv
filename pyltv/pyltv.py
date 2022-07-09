@@ -172,7 +172,8 @@ def default_rate(cohort_data, market, recovery_rates, dpd=7):
 
         for month in cohort_data.index:
 
-            if month > final_month - 12:
+            # if the current month is within 13 months of the last month of data (not 365 dpd baked)
+            if month > final_month - 13:
 
                 recovery_rate_365 = float(recovery_rates[recovery_rates.month == month].loc[market, 'recovery_51_'])
 

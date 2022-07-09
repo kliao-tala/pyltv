@@ -1,7 +1,9 @@
 .ipynb_checkpoints/
 __pycache__/
 .DS_Store
-pyltv/data/
+pyltv/data/*
+!pyltv/data/model_dependencies/
+!pyltv/data/historicals/
 env/
 .idea/
 

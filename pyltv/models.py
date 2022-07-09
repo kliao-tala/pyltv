@@ -243,19 +243,19 @@ class AutoRegression(DataManager):
             return pd.concat(forecasted_dfs)
 
         # Forecast default rates
-        asymptotes = {'mx': {7: .085, 51: .0525, 365: .0425},
+        asymptotes = {'mx': {7: .06, 51: .043, 365: .0425},
                       'ph': {7: .06, 51: .04, 365: .035},
                       'ke': {7: .085, 51: .055, 365: .0425}}
 
         data = forecast_defaults(data=data, dpd=7, n_months=n_months,
                                  asymptote=asymptotes[self.market][7],
-                                 weight_actuals=(.7, .8, .9, 1))
+                                 weight_actuals=(0.85, .9, .95,  1))
         data = forecast_defaults(data=data, dpd=51, n_months=n_months,
                                  asymptote=asymptotes[self.market][51],
-                                 weight_actuals=(.7, .8, .9, 1))
+                                 weight_actuals=(0.85, .9, .95,  1))
         data = forecast_defaults(data=data, dpd=365, n_months=n_months,
                                  asymptote=asymptotes[self.market][365],
-                                 weight_actuals=(.7, .8, .9, 1))
+                                 weight_actuals=(0.85, .9, .95,  1))
 
         self.ret_expectations = []
 
@@ -343,7 +343,7 @@ class AutoRegression(DataManager):
                     else:
                         n_samples = len(weights)
 
-                    weighted_sum = pd.Series(np.zeros(n_months), index=self.ret_expectations[0].index)
+                    weighted_sum = pd.Series(np.zeros(n_months), index=times)
 
                     for j in range(1, n_samples+1):
                         weighted_sum += self.ret_expectations[-j] * weights[-j]
