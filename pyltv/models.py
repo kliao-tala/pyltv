@@ -268,8 +268,8 @@ class AutoRegression(DataManager):
                 # initial cohort size
                 n = int(c_data.loc[1, 'count_borrowers'])
 
-                # if there are at least 5 data points
-                if len(c_data['borrower_retention'].dropna()) >= 5:
+                # if this is the first cohort being forecast, powerslope
+                if len(self.ret_expectations) == 0:
                     def power_fcast(c_data, param='borrower_retention'):
 
                         c = c_data[param].dropna()
