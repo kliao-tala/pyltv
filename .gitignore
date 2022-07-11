@@ -1,14 +1,29 @@
 .ipynb_checkpoints/
 __pycache__/
 .DS_Store
-pyltv/data/*
-!pyltv/data/model_dependencies/
-!pyltv/data/historicals/
 env/
 .idea/
 
-# ignore all python notebooks
-*.ipynb
+# everything in the pyltv folder
+pyltv/*
 
-# except these
-![MX] AR2 Full Model.ipynb
+# ... except these folders
+!pyltv/data
+!pyltv/docs
+!pyltv/queries
+
+# ... and except these files
+!pyltv/config.py
+!pyltv/dbm.py
+!pyltv/models.py
+!pyltv/setup.py
+!pyltv/pyltv.py
+!pyltv/\[MX\] AR Full Model.ipynb
+!pyltv/\[PH\] AR Full Model.ipynb
+!pyltv/\[KE\] AR Full Model.ipynb
+!pyltv/pyLTV Model Accuracy Monitor.ipynb
+
+# everything in the data folder, except
+pyltv/data/*
+!pyltv/data/model_dependencies/
+!pyltv/data/historicals/

@@ -180,7 +180,7 @@ class AutoRegression(DataManager):
                     if len(fcast) < 6:
                         s = np.mean(fcast.iloc[-1:])
                     elif len(fcast >= 6):
-                        s = np.mean(fcast.iloc[-1:])
+                        s = np.mean(fcast.iloc[-2:])
 
                     # for the first point
                     if i_ == 0:
@@ -249,13 +249,13 @@ class AutoRegression(DataManager):
 
         data = forecast_defaults(data=data, dpd=7, n_months=n_months,
                                  asymptote=asymptotes[self.market][7],
-                                 weight_actuals=(0.85, .9, .95,  1))
+                                 weight_actuals=(0.7, .8, .9,  1))
         data = forecast_defaults(data=data, dpd=51, n_months=n_months,
                                  asymptote=asymptotes[self.market][51],
                                  weight_actuals=(0.85, .9, .95,  1))
         data = forecast_defaults(data=data, dpd=365, n_months=n_months,
                                  asymptote=asymptotes[self.market][365],
-                                 weight_actuals=(0.85, .9, .95,  1))
+                                 weight_actuals=(0.25, .4, .6,  1))
 
         self.ret_expectations = []
 
