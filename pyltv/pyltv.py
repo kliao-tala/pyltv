@@ -127,7 +127,7 @@ def default_rate(cohort_data, market, recovery_rates, dpd=7):
     default_rate : pandas Series
     """
     if dpd == 7:
-        return cohort_data['default_rate_amount_7d']
+        return cohort_data['default_rate_amount_7d'].copy()
 
     elif dpd == 51:
         dr = cohort_data['default_rate_amount_51d'].copy()

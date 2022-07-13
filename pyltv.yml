@@ -10,3 +10,4 @@ dependencies:
   - plotly
   - scipy
   - snowflake-sqlalchemy
+  - catboost
