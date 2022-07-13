@@ -12,12 +12,14 @@ pyltv/*
 !pyltv/docs
 !pyltv/queries
 
-# ... and except these files
+# ... except these files
 !pyltv/config.py
 !pyltv/dbm.py
 !pyltv/models.py
 !pyltv/setup.py
 !pyltv/pyltv.py
+
+# ... except these notebooks
 !pyltv/\[MX\] ARLTCatBoost Model.ipynb
 !pyltv/\[PH\] ARLTCatBoost Model.ipynb
 !pyltv/\[KE\] ARLTCatBoost Model.ipynb
