@@ -18,10 +18,9 @@ pyltv/*
 !pyltv/models.py
 !pyltv/setup.py
 !pyltv/pyltv.py
-!pyltv/\[MX\] AR Full Model.ipynb
-!pyltv/\[PH\] AR Full Model.ipynb
-!pyltv/\[KE\] AR Full Model.ipynb
-!pyltv/pyLTV Model Accuracy Monitor.ipynb
+!pyltv/\[MX\] ARLTCatBoost Model.ipynb
+!pyltv/\[PH\] ARLTCatBoost Model.ipynb
+!pyltv/\[KE\] ARLTCatBoost Model.ipynb
 
 # everything in the data folder, except
 pyltv/data/*
