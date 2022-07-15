@@ -34,7 +34,7 @@ class ARLTCatBoost(DataManager):
         Number of months to consider data fully baked. The last bake_duration number
         of months is removed from the data during cleaning.
     """
-    def __init__(self, data, market, to_usd=True, ltv_expected=None):
+    def __init__(self, data, market, to_usd=True, ltv_expected=None, debug=False):
         """
         Sets model attributes, loads additional data required for models (inputs &
         ltv_expected), and cleans data.
@@ -55,6 +55,7 @@ class ARLTCatBoost(DataManager):
         """
         super().__init__(data, market, to_usd)
         self.name = 'ARLTCatBoost'
+        self.debug = debug
 
         if ltv_expected:
             self.ltv_expected = pd.read_csv(f'data/model_dependencies/{ltv_expected}')
@@ -471,18 +472,24 @@ class ARLTCatBoost(DataManager):
             actual = self.data[self.data['first_loan_local_disbursement_month'] == cohort]
             predicted = backtest[backtest.cohort == cohort]
 
-            start = backtest[backtest.data_type == 'forecast'].index.min()
+            # get indices of where forecast starts and actuals end, this should be equal to hold_months
+            start = predicted[predicted.data_type == 'forecast'].index.min()
             stop = actual.index.max()
+
+            # the stop and start indices should always match the range of hold_months
+            assert stop - start + 1 == hold_months, f'{stop} - {start} is not equal to {hold_months}'
 
             # compute errors
             backtest_report_cols = []
             errors = []
 
             cols = [c for c in self.data.columns if c not in self.label_cols]
-            # cols.remove('count_first_loans')
 
             for col in cols:
                 for metric in metrics:
+                    if self.debug:
+                        print(f'Backtesting actuals: {actual.loc[start:stop, col]}')
+                        print(f'against forecast: {predicted.loc[start:stop, col]}')
                     err = compute_error(actual.loc[start:stop, col], predicted.loc[start:stop, col],
                                           metric=metric)
 
@@ -1947,8 +1954,12 @@ class PowerSlope(DataManager):
             actual = self.data[self.data['first_loan_local_disbursement_month'] == cohort]
             predicted = backtest[backtest.cohort == cohort]
 
-            start = backtest[backtest.data_type == 'forecast'].index.min()
+            # get indices of where forecast starts and actuals end, this should be equal to hold_months
+            start = predicted[predicted.data_type == 'forecast'].index.min()
             stop = actual.index.max()
+
+            # the stop and start indices should always match the range of hold_months
+            assert stop - start + 1 == hold_months, f'{stop} - {start} is not equal to {hold_months}'
 
             # compute errors
             backtest_report_cols = []
