@@ -399,7 +399,7 @@ class ARLTCatBoost(DataManager):
         return pd.concat(forecast_dfs)
 
     def backtest_data(self, data, min_months=4, hold_months=4, fcast_months=50, metrics=None,
-                      retention_weights=(1, 1, 1)):
+                      retention_weights=(1, 1.5, 1.5, 2, 2)):
         """
         Backtest forecasted values against actuals.
 
