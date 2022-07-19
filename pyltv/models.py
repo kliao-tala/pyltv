@@ -30,7 +30,7 @@ class ARLTCatBoost(DataManager):
     to_usd : bool
         If True, convert fields in local currency to USD. If False, leave fields as
         local currency.
-    bake_duration : int
+    ltv_expected : int
         Number of months to consider data fully baked. The last bake_duration number
         of months is removed from the data during cleaning.
     """

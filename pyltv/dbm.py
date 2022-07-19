@@ -6,7 +6,7 @@
 # -----------------------------------------------------------------
 import pandas as pd
 import snowflake.connector
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from snowflake.sqlalchemy import URL
 
 # for private key handling
@@ -118,6 +118,12 @@ class DBM:
             with self.ctx.cursor() as curs:
                 results = curs.execute(query)
                 return pd.DataFrame.from_records(iter(results), columns=[c[0] for c in results.description])
+
+    def exec_sql(self, sql=None):
+        with self.engine.connect() as connection:
+            result = connection.execute(text(sql))
+        for row in result:
+            print(row)
 
     def query_db(self, query):
         """
