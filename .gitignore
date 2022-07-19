@@ -23,6 +23,9 @@ pyltv/*
 !pyltv/\[MX\] ARLTCatBoost Model.ipynb
 !pyltv/\[PH\] ARLTCatBoost Model.ipynb
 !pyltv/\[KE\] ARLTCatBoost Model.ipynb
+!pyltv/\[PH\] Backtest.ipynb
+!pyltv/\[KE\] Backtest.ipynb
+!pyltv/\[MX\] Backtest.ipynb
 
 # everything in the data folder, except
 pyltv/data/*
