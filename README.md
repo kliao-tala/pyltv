@@ -22,7 +22,8 @@ cleaning, feature generation, and plotting functionality and serves as the base 
 forecast models.
 
 **models.py** contains the forecasting models. Each model is created as its own class and has different logic built in
-to forecast each data field. Each model class also contains a backtesting functionality.
+to forecast each data field. Each model class also contains a backtesting functionality. The current model in
+production is *ARLTCatBoost*.
 
 **config.py** contains various constants and model parameters required for some forecasting models. Values such as max
 survival, opex rates, and late fees can be specified here.
