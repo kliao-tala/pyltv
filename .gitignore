@@ -26,6 +26,7 @@ pyltv/*
 !pyltv/\[PH\] Backtest.ipynb
 !pyltv/\[KE\] Backtest.ipynb
 !pyltv/\[MX\] Backtest.ipynb
+!pyltv/\[KE\] Forecasting Defaults.ipynb
 
 # everything in the data folder, except
 pyltv/data/*
