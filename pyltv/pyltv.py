@@ -479,12 +479,11 @@ class DataManager:
         # add cohort label column
         self.data['cohort'] = self.data['first_loan_local_disbursement_month']
 
-        # convert local currency to USD
-        if self.to_usd:
-            self.data['total_amount'] /= config['forex'][self.market]
-            self.data['total_interest_assessed'] /= config['forex'][self.market]
-            self.data['total_rollover_charged'] /= config['forex'][self.market]
-            self.data['total_rollover_reversed'] /= config['forex'][self.market]
+        # convert cash cols from local currency to USD
+        cash_cols = ['total_amount', 'total_interest_assessed', 'total_rollover_charged', 'total_rollover_reversed']
+        for col in cash_cols:
+            if self.to_usd:
+                self.data[col] /= config['forex'][self.market]
 
         cohort_data = []
         for c in self.data.cohort.unique():
@@ -493,8 +492,7 @@ class DataManager:
             # start indexing from 1
             c_data.index = np.arange(1, len(c_data)+1)
 
-            # remove the last "bake_duration" months of data for each cohort
-            # this is to ensure default_rate_7dpd data is fully baked
+            # remove last "bake_duration" months of data (ensures default_rate_7dpd data is baked)
             c_data = c_data.iloc[:-self.bake_duration]
 
             cohort_data.append(c_data)
@@ -564,7 +562,7 @@ class DataManager:
 
         return pd.concat(cohort_dfs)
 
-    def plot_cohorts(self, param, dataset='clean', show=False):
+    def plot_cohorts(self, param, dataset='data', show=False):
         """
         Generate scatter plot for a specific parameter.
 
@@ -586,9 +584,9 @@ class DataManager:
             rendering it.
         """
         # print message about what datasets are available to plot
-        if dataset not in ['clean', 'forecast', 'backtest', 'backtest_report']:
+        if dataset not in ['data', 'forecast', 'backtest', 'backtest_report']:
             print('Dataset must be one of the following: ')
-            print('raw, clean, forecast, backtest, backtest_report')
+            print('data, forecast, backtest, backtest_report')
 
         else:
             # print message if data has not been forecast or backtested yet
@@ -599,19 +597,14 @@ class DataManager:
 
             else:
                 # check that specified param exists in dataset
-                if dataset == 'clean':
-                    check = 'data'
-                else:
-                    check = dataset
-
-                if param not in self.__getattribute__(check).columns:
+                if param not in self.__getattribute__(dataset).columns:
                     print('Not a valid parameter name! Available params:')
                     print('')
-                    print(self.__getattribute__(check).columns)
+                    print(self.__getattribute__(dataset).columns)
 
                 # generate plots according to dataset
                 else:
-                    if dataset in ['forecast', 'backtest', 'backtest_report']:
+                    if dataset in ['data', 'forecast', 'backtest']:
                         curves = []
 
                         if dataset == 'forecast':
@@ -640,7 +633,7 @@ class DataManager:
 
                                 curves.append(output)
 
-                        elif dataset == 'clean':
+                        elif dataset == 'data':
                             for cohort in self.data.cohort.unique():
                                 output = self.data[self.data.cohort == cohort][param]
 
@@ -676,6 +669,7 @@ class DataManager:
                         return fig
 
                     elif dataset == 'backtest_report':
+                        print(dataset)
                         curves = []
                         for cohort in self.backtest_report.cohort.unique():
                             c_data = self.backtest_report[self.backtest_report.cohort == cohort]
