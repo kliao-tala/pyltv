@@ -586,14 +586,13 @@ class DataManager:
             rendering it.
         """
         # print message about what datasets are available to plot
-        if dataset != 'raw' and dataset != 'clean' and dataset != 'forecast' and dataset != 'backtest' \
-                and dataset != 'backtest_report':
+        if dataset not in ['clean', 'forecast', 'backtest', 'backtest_report']:
             print('Dataset must be one of the following: ')
             print('raw, clean, forecast, backtest, backtest_report')
 
         else:
             # print message if data has not been forecast or backtested yet
-            if (dataset == 'forecast' or dataset == 'backtest' or dataset == 'backtest_report') and \
+            if (dataset in ['forecast', 'backtest', 'backtest_report']) and \
                     self.__getattribute__(dataset) is None:
                 print("Data has not been forecast or backtested yet.")
                 print('Run forecast_data() or backtest_data() methods first.')
@@ -612,7 +611,7 @@ class DataManager:
 
                 # generate plots according to dataset
                 else:
-                    if dataset == 'clean' or dataset == 'raw' or dataset == 'forecast' or dataset == 'backtest':
+                    if dataset in ['forecast', 'backtest', 'backtest_report']:
                         curves = []
 
                         if dataset == 'forecast':
@@ -644,14 +643,6 @@ class DataManager:
                         elif dataset == 'clean':
                             for cohort in self.data.cohort.unique():
                                 output = self.data[self.data.cohort == cohort][param]
-
-                                output.name = cohort
-
-                                curves.append(output)
-
-                        elif dataset == 'raw':
-                            for cohort in self.raw.cohort.unique():
-                                output = self.raw[self.raw.cohort == cohort][param]
 
                                 output.name = cohort
 
