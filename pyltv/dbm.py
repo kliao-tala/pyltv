@@ -38,12 +38,13 @@ class DBM:
         self.ctx = None
         self.data = None
         self.engine = None
+        self.pkey = None
 
         # get private key
-        pkey = self.get_private_key_bytes(f'/Users/{self.user}/.ssh/snowflake_private_keypair.pem', None)
+        self.pkey = self.get_private_key_bytes(f'/Users/{self.user}/.ssh/snowflake_private_keypair.pem', None)
 
         # connect to snowflake
-        self.create_engine(pkey)
+        self.create_engine(self.pkey)
 
     def get_private_key_bytes(self, keyfile, keypass):
         """

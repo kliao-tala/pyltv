@@ -466,67 +466,17 @@ class DataManager:
 
         # clean data and generate features
         self.clean_data()
-        #self.raw = self.generate_features(self.raw)
         self.data = self.generate_features(self.data)
-
-        # print the date range that the data spans
-        min_date = str(pd.to_datetime(self.data.cohort).min())[:7]
-        max_date = str(pd.to_datetime(self.data.cohort).max())[:7]
-        n_months = self.data.cohort.nunique()
-        print(f'Clean data spans {min_date} to {max_date}')
-        print(f'Total # of cohorts: {n_months}')
-        print('')
 
     def clean_data(self):
         """
         Performs various data clean up steps to prepare data for model.
         """
-        # remove any leading or trailing spaces in col names
-        self.data.columns = [c.strip() for c in self.data.columns]
-
-        # rename any columns with mismatching names
-        self.data = self.data.rename(columns={'First Loan Disbursement Month': 'first_loan_local_disbursement_month',
-                                              'Total Principal Amount': 'total_amount',
-                                              'default_rate_amount_7d': 'default_rate_amount_7d',
-                                              'default_rate_amount_51d': 'default_rate_amount_51d',
-                                              'default_rate_amount_30d': 'default_rate_amount_30d'})
-
-        # add a leading 0 to the month if there isn't one already to match rest of the data
-        for date in self.data['first_loan_local_disbursement_month'].unique():
-            if len(date) < 7:
-                year, month = date.split('-')
-                month = '0' + month
-                self.data = self.data.replace({date: year + '-' + month})
-
-        # convert cols to appropriate datatypes
-        int_cols = ['count_borrowers',
-                    'count_loans',
-                    'total_amount',
-                    'total_interest_assessed',
-                    'total_rollover_charged',
-                    'total_rollover_reversed']
-        for col in int_cols:
-            try:
-                self.data[col] = pd.to_numeric(self.data[col].str.replace(',', ''))
-            except AttributeError:
-                self.data[col] = pd.to_numeric(self.data[col])
-
-        # convert month since disbursement to int
-        if self.data['months_since_first_loan_disbursed'].dtype == 'O':
-            self.data['months_since_first_loan_disbursed'] = self.data['months_since_first_loan_disbursed'].apply(
-                lambda x: int(x.split(' ')[0]))
-
-        # drop any negative months since first loan
-        self.data = self.data[~self.data['months_since_first_loan_disbursed'] < 0]
-
         # sort by months since first disbursement
         self.data = self.data.sort_values(['first_loan_local_disbursement_month',
                                            'months_since_first_loan_disbursed'])
 
-        # remove all columns calculated through looker
-        self.data = self.data.loc[:, :"default_rate_amount_365d"]
-
-        # add more convenient cohort label column
+        # add cohort label column
         self.data['cohort'] = self.data['first_loan_local_disbursement_month']
 
         # convert local currency to USD
@@ -536,38 +486,35 @@ class DataManager:
             self.data['total_rollover_charged'] /= config['forex'][self.market]
             self.data['total_rollover_reversed'] /= config['forex'][self.market]
 
-        # save raw data df before removing data for forecast
-        self.raw = self.data.copy()
-
-        # remove the last month of the raw data (incomplete month)
-        cohort_data = []
-        for c in self.raw.cohort.unique():
-            c_data = self.raw[self.raw.cohort == c]
-            c_data.index = np.arange(1, len(c_data) + 1)
-
-            cohort_data.append(c_data.iloc[:-1])
-
-        self.raw = pd.concat(cohort_data, axis=0)
-
         cohort_data = []
         for c in self.data.cohort.unique():
             c_data = self.data[self.data.cohort == c].copy()
+
+            # start indexing from 1
             c_data.index = np.arange(1, len(c_data)+1)
 
             # remove the last "bake_duration" months of data for each cohort
-            # this is to ensure default_rate_51dpd data is fully baked
+            # this is to ensure default_rate_7dpd data is fully baked
             c_data = c_data.iloc[:-self.bake_duration]
-
-            # # blank the last 2 data points in default rates to ensure data is baked
-            # default_cols = [i for i in c_data.columns if 'default' in i]
-            #
-            # c_data.loc[len(c_data) - 1:, default_cols] = np.nan
 
             cohort_data.append(c_data)
 
         self.data = pd.concat(cohort_data, axis=0)
 
-    # --- CONVENIENCE FUNCTIONS --- #
+    def summarize_data(self):
+        """
+        Prints out some general information about the data
+        """
+        # min and max dates that the data spans
+        min_date = str(pd.to_datetime(self.data.cohort).min())[:7]
+        max_date = str(pd.to_datetime(self.data.cohort).max())[:7]
+
+        # number of cohorts
+        n_cohorts = self.data.cohort.nunique()
+
+        print(f'Cleaned data spans {min_date} to {max_date}')
+        print(f'Total # of cohorts: {n_cohorts}')
+
     def generate_features(self, data):
         """
         Generate all features required for pLTV model.
