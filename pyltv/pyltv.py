@@ -1,8 +1,9 @@
 # -----------------------------------------------------------------------------------------------------------------
-# pyLTV Library
+# pyLTV Module
 #
-# This library defines a Data Manager class that allows data cleaning, feature generation, and plotting
-# functionality. Forecasting & backtesting models can be built on top of this base class.
+# This module contains functions to generate all features of the pLTV data. It also contains a Data Manager class
+# that allows data cleaning, feature generation, and plotting functionality. Forecasting & backtesting models can
+# be built on top of this base class.
 # -----------------------------------------------------------------------------------------------------------------
 import numpy as np
 import pandas as pd
@@ -102,7 +103,7 @@ def interest_rate(cohort_data):
 def default_rate(cohort_data, market, recovery_rates, dpd=7):
     """
     Default rate for a specified days past due (dpd). 7dpd data is assumed to be baked.
-    During the data pull, only loans that were disbursed 60 days prior to the current
+    During the data pull, only loans that were disbursed 97 days prior to the current
     date are pulled, ensuring 7dpd default rates are baked. Where 51dpd or 365dpd data
     is baked, it's taken as is. For unbaked data, 365dpd is derived from 51dpd, 51dpd
     from 30dpd, and 30dpd from 7dpd using recovery rates. The recovery rates can be
@@ -404,8 +405,7 @@ def credit_margin_percent(cohort_data):
 
 # --- DATA MANAGER CLASS --- #
 class DataManager:
-    """Data Manager Class
-
+    """
     Contains functionality to clean data, generate features, and visualize LTV data.
 
     Parameters
@@ -428,14 +428,11 @@ class DataManager:
         capital.
 
     clean_data()
-        Performs all data cleaning steps required before modeling.
+        Performs data cleaning steps required before modeling.
     """
 
     def __init__(self, data, market, to_usd=True, bake_duration=4):
         """
-        Sets model attributes, loads additional data required (recovery rates), cleans
-        data and generates features.
-
         Parameters
         ----------
         data : pandas DataFrame
@@ -470,7 +467,7 @@ class DataManager:
 
     def clean_data(self):
         """
-        Performs various data clean up steps to prepare data for model.
+        Performs various data cleaning steps to prepare data for model.
         """
         # sort by months since first disbursement
         self.data = self.data.sort_values(['first_loan_local_disbursement_month',
@@ -562,18 +559,17 @@ class DataManager:
 
         return pd.concat(cohort_dfs)
 
-    def plot_cohorts(self, param, dataset='data', show=False):
+    def plot_cohorts(self, field, dataset='data', show=False):
         """
-        Generate scatter plot for a specific parameter.
+        Generate various plots for a specified field in the data.
 
         Parameters
         ----------
-        param : str
+        field : str
             Field name to plot. Can be any column in the dataset.
         dataset : str
             Specifies which dataset to plot from. Options are:
-                - raw
-                - clean
+                - data
                 - forecast
                 - backtest
                 - backtest_report
@@ -596,9 +592,9 @@ class DataManager:
                 print('Run forecast_data() or backtest_data() methods first.')
 
             else:
-                # check that specified param exists in dataset
-                if param not in self.__getattribute__(dataset).columns:
-                    print('Not a valid parameter name! Available params:')
+                # check that specified field exists in dataset
+                if field not in self.__getattribute__(dataset).columns:
+                    print('Not a valid field name! Available fields:')
                     print('')
                     print(self.__getattribute__(dataset).columns)
 
@@ -611,7 +607,7 @@ class DataManager:
                             for cohort in self.forecast.cohort.unique():
                                 c_data = self.forecast[self.forecast.cohort == cohort]
                                 for dtype in c_data.data_type.unique():
-                                    output = c_data[c_data.data_type == dtype][param]
+                                    output = c_data[c_data.data_type == dtype][field]
 
                                     output.name = cohort + '-' + dtype
 
@@ -622,20 +618,20 @@ class DataManager:
                                 c_data = self.backtest[self.backtest.cohort == cohort]
 
                                 # append raw data
-                                output = self.data[self.data.cohort == cohort][param]
+                                output = self.data[self.data.cohort == cohort][field]
                                 output.name = cohort + '-actual'
 
                                 curves.append(output)
 
                                 # append forecast
-                                output = c_data[c_data.data_type == 'forecast'][param]
+                                output = c_data[c_data.data_type == 'forecast'][field]
                                 output.name = cohort + '-forecast'
 
                                 curves.append(output)
 
                         elif dataset == 'data':
                             for cohort in self.data.cohort.unique():
-                                output = self.data[self.data.cohort == cohort][param]
+                                output = self.data[self.data.cohort == cohort][field]
 
                                 output.name = cohort
 
@@ -654,12 +650,12 @@ class DataManager:
 
                         fig = go.Figure(traces)
 
-                        if 'default' in param:
-                            y_format = dict(title=param, tickformat=".2%")
+                        if 'default' in field:
+                            y_format = dict(title=field, tickformat=".2%")
                         else:
-                            y_format = dict(title=param)
+                            y_format = dict(title=field)
 
-                        fig.update_layout(title=f'{param} - {dataset.upper()}',
+                        fig.update_layout(title=f'{field} - {dataset.upper()}',
                                           xaxis=dict(title='Month Since First Disbursement'),
                                           yaxis=y_format)
 
@@ -673,7 +669,7 @@ class DataManager:
                         curves = []
                         for cohort in self.backtest_report.cohort.unique():
                             c_data = self.backtest_report[self.backtest_report.cohort == cohort]
-                            output = c_data[param]
+                            output = c_data[field]
 
                             output.name = cohort
 
@@ -684,17 +680,17 @@ class DataManager:
                             traces.append(go.Bar(name=cohort.name, x=cohort.index, y=cohort))
 
                         # add a line showing the overall mean
-                        mean_df = pd.DataFrame(float(self.backtest_report[param].mean()),
+                        mean_df = pd.DataFrame(float(self.backtest_report[field].mean()),
                                                index=self.backtest_report.index, columns=['mean'])
                         traces.append(go.Scatter(name='mean', x=mean_df.index, y=mean_df['mean'], mode='lines'))
 
-                        metric = param.split('-')[1].upper()
+                        metric = field.split('-')[1].upper()
                         fig = go.Figure(traces)
 
-                        if 'mpe' in param or 'mape' in param or 'default' in param or 'retention' in param:
-                            y_format = dict(title=param, tickformat=".2%")
+                        if 'mpe' in field or 'mape' in field or 'default' in field or 'retention' in field:
+                            y_format = dict(title=field, tickformat=".2%")
                         else:
-                            y_format = dict(title=param)
+                            y_format = dict(title=field)
 
                         fig.update_layout(title=f'{self.backtest_months} Month Backtest - {metric}',
                                           xaxis=dict(title='Month Since First Disbursement'),
