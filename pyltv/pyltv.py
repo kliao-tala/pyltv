@@ -431,7 +431,7 @@ class DataManager:
         Performs all data cleaning steps required before modeling.
     """
 
-    def __init__(self, data, market, to_usd=True, bake_duration=2):
+    def __init__(self, data, market, to_usd=True, bake_duration=4):
         """
         Sets model attributes, loads additional data required (recovery rates), cleans
         data and generates features.
