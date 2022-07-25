@@ -74,7 +74,7 @@ class ARLTCatBoost(DataManager):
         self.ret_expectations = None
 
     # --- FORECAST FUNCTIONS --- #
-    def forecast_data(self, data, min_months=5, n_months=50, default_stress=None,
+    def forecast_data(self, data, min_months=1, n_months=50, default_stress=None,
                       retention_weights=(1, 1.5, 1.5, 2, 2)):
         """
         Generates a forecast of "count_borrowers" out to the input number of months.
