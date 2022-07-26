@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------------------------------------------
 # LTV Forecasting Library
 #
-# This library defines a Model class that provides functionality for LTV data modeling and forecasting.
+# This library defines a Model class that provides functionality for forecasting.
 # -----------------------------------------------------------------------------------------------------------------
 from pyltv import *
 from config import config
@@ -11,7 +11,7 @@ import catboost as cb
 from sklearn.model_selection import train_test_split
 
 
-# --- Auto Regression Low Tenure Cat Boost --- #
+# --- Production Models --- #
 class ARLTCatBoost(DataManager):
     """
     ARLTCatBoost is short for Auto Regression Low-Tenure CatBoost. The forecast
@@ -390,7 +390,6 @@ class ARLTCatBoost(DataManager):
         return pd.concat(forecast_dfs)
 
 
-# --- POWER SLOPE MODEL --- #
 class PowerSlope(DataManager):
     """
     The PowerSlope model is named so after the method used to forecast borrower
@@ -434,6 +433,7 @@ class PowerSlope(DataManager):
         """
         super().__init__(data, market, to_usd)
         self.name = 'PowerSlope'
+        self.debug = debug
 
         if expectations:
             self.expectations = pd.read_csv(f'data/model_dependencies/{expectations}')
@@ -695,7 +695,7 @@ class PowerSlope(DataManager):
         return pd.concat(forecast_dfs)
 
 
-# --- SBG MODEL --- #
+# --- EXPERIMENTAL Models --- #
 alpha = beta = 1
 
 
