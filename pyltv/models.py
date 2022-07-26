@@ -71,9 +71,8 @@ class ARLTCatBoost(DataManager):
 
     def forecast_data(self, data, n_months=50, default_stress=None, retention_weights=(1, 1.5, 1.5, 2, 2)):
         """
-        Generates a forecast of "count_borrowers" out to the input number of months.
-        The original and forecasted values are returned as a new dataframe, set as
-        a new attribute of the model, *.forecast*.
+        Forecast function which forecasts all features of the model's data. Some fields
+        such as CrM and LTV are not forecast themselves but derived from underlying fields.
 
         Parameters
         ----------
