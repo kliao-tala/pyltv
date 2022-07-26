@@ -12,7 +12,7 @@ Python library providing the following functionality:
 For any questions or comments about this library, please reach out to *kenny.liao@tala.co*.
 
 ## Library Structure
-The library consists of 3 main modules and a config file.
+The library consists of 4 main modules and a config file.
 
 **dbm.py** is a Database Management module which contains the DBM class. The DBM class will establish a connection to
 our Snowflake databases and allow queries as well as pulling pre-written queries for LTV analysis.
@@ -24,6 +24,9 @@ forecast models.
 **models.py** contains the forecasting models. Each model is created as its own class and has different logic built in
 to forecast each data field. Each model class also contains a backtesting functionality. The current model in
 production is *ARLTCatBoost*.
+
+**utils.py** contains utility functions for computing errors between actuals and predictions as well as backtesting 
+models.
 
 **config.py** contains various constants and model parameters required for some forecasting models. Values such as max
 survival, opex rates, and late fees can be specified here.
