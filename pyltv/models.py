@@ -413,7 +413,7 @@ class PowerSlope(DataManager):
         Number of months to consider data fully baked. The last bake_duration number
         of months is removed from the data during cleaning.
     """
-    def __init__(self, data, market, to_usd=True, expectations=None):
+    def __init__(self, data, market, to_usd=True, expectations=None, debug=False):
         """
         Sets model attributes, loads additional data required for models (inputs &
         expectations), and cleans data.
