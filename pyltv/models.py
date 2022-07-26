@@ -30,9 +30,8 @@ class ARLTCatBoost(DataManager):
     to_usd : bool
         If True, convert fields in local currency to USD. If False, leave fields as
         local currency.
-    expectations : int
-        Number of months to consider data fully baked. The last bake_duration number
-        of months is removed from the data during cleaning.
+    expectations : pandas dataframe
+            Specify expectations file to use for forecasting.
     debug : bool
         If True, debugging assertions and print statements will be activated.
     """
@@ -48,9 +47,8 @@ class ARLTCatBoost(DataManager):
         to_usd : bool
             If True, convert fields in local currency to USD. If False, leave fields as
             local currency.
-        expectations : int
-            Number of months to consider data fully baked. The last bake_duration number
-            of months is removed from the data during cleaning.
+        expectations : pandas dataframe
+            Specify expectations file to use for forecasting.
         debug : bool
             If True, debugging assertions and print statements will be activated.
         """
@@ -408,9 +406,10 @@ class PowerSlope(DataManager):
     to_usd : bool
         If True, convert fields in local currency to USD. If False, leave fields as
         local currency.
-    bake_duration : int
-        Number of months to consider data fully baked. The last bake_duration number
-        of months is removed from the data during cleaning.
+    expectations : pandas dataframe
+        Specify expectations file to use for forecasting.
+    debug : bool
+        If True, debugging assertions and print statements will be activated.
     """
     def __init__(self, data, market, to_usd=True, expectations=None, debug=False):
         """
@@ -427,14 +426,20 @@ class PowerSlope(DataManager):
         to_usd : bool
             If True, convert fields in local currency to USD. If False, leave fields as
             local currency.
-        bake_duration : int
-            Number of months to consider data fully baked. The last bake_duration number
-            of months is removed from the data during cleaning.
+        expectations : pandas dataframe
+            Specify expectations file to use for forecasting.
+        debug : bool
+            If True, debugging assertions and print statements will be activated.
         """
         super().__init__(data, market, to_usd)
         self.name = 'PowerSlope'
         self.debug = debug
 
+        # initialize placeholders
+        self.default_stress = None
+        self.label_cols = None
+
+        #
         if expectations:
             self.expectations = pd.read_csv(f'data/model_dependencies/{expectations}')
 
@@ -444,11 +449,6 @@ class PowerSlope(DataManager):
 
         # set index to start at 1
         self.expectations.index = np.arange(1, len(self.expectations)+1)
-
-        # initialize placeholders
-        self.min_months = None
-        self.default_stress = None
-        self.label_cols = None
 
     # --- FORECAST FUNCTIONS --- #
     def forecast_data(self, data, n_months=50, default_stress=None):
