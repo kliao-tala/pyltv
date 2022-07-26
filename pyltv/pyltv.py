@@ -456,7 +456,6 @@ class DataManager:
         self.forecast = None
         self.backtest = None
         self.backtest_report = None
-        self.backtest_months = None
 
         # load recovery rates
         self.recovery_rates = pd.read_csv('data/model_dependencies/recovery_rates.csv').set_index('market')
@@ -692,7 +691,7 @@ class DataManager:
                         else:
                             y_format = dict(title=field)
 
-                        fig.update_layout(title=f'{self.backtest_months} Month Backtest - {metric}',
+                        fig.update_layout(title=f'{metric} Backtest',
                                           xaxis=dict(title='Month Since First Disbursement'),
                                           yaxis=y_format)
 

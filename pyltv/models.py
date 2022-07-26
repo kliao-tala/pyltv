@@ -68,14 +68,10 @@ class ARLTCatBoost(DataManager):
         self.expectations.index = np.arange(1, len(self.expectations)+1)
 
         # initialize placeholders
-        self.min_months = None
         self.default_stress = None
-        self.label_cols = None
         self.ret_expectations = None
 
-    # --- FORECAST FUNCTIONS --- #
-    def forecast_data(self, data, min_months=1, n_months=50, default_stress=None,
-                      retention_weights=(1, 1.5, 1.5, 2, 2)):
+    def forecast_data(self, data, n_months=50, default_stress=None, retention_weights=(1, 1.5, 1.5, 2, 2)):
         """
         Generates a forecast of "count_borrowers" out to the input number of months.
         The original and forecasted values are returned as a new dataframe, set as
@@ -86,10 +82,6 @@ class ARLTCatBoost(DataManager):
         data : pandas dataframe
             Data to forecast. Usually will be self.data which is data that has already
             been cleaned and processed.
-        min_months : int
-            The number of months of data a cohort must have in order to be forecast.
-            This limitation is to avoid the large errors incurred when forecasting
-            data for cohorts with few data points (<5).
         n_months : int
             Number of months to forecast to.
         default_stress: float
@@ -99,12 +91,11 @@ class ARLTCatBoost(DataManager):
             Set of weights used in computing the weighted average retention expectation
             curves.
         """
-        self.min_months = min_months
         self.default_stress = default_stress
 
-        # range of desired time periods
+        # create time index starting with month 1
         times = np.arange(1, n_months+1)
-        times_dict = {i: i-1 for i in times}
+        times_dict = {i: i-1 for i in times} # mapping for months since disbursement
 
         # ----- Prepare Data ----- #
         dfs = []
@@ -112,36 +103,35 @@ class ARLTCatBoost(DataManager):
             # data for current cohort
             c_data = data[data.cohort == cohort].copy()
 
-            # only for cohorts with at least min_months of data
-            if len(c_data) >= min_months:
-                # null df used to extend original cohort df to desired number of forecast months
-                dummy_df = pd.DataFrame(np.nan, index=times, columns=['null'])
+            # null df used to extend original cohort df to desired number of forecast months
+            dummy_df = pd.DataFrame(np.nan, index=times, columns=['null'])
 
-                # create label column to denote actual vs forecast data
-                c_data.loc[:, 'data_type'] = 'actual'
+            # create label column to denote actual vs forecast data
+            c_data.loc[:, 'data_type'] = 'actual'
 
-                # extend cohort df
-                c_data = pd.concat([c_data, dummy_df], axis=1).drop('null', axis=1)
-                # use cohort as df name
-                c_data.name = cohort
+            # extend cohort df
+            c_data = pd.concat([c_data, dummy_df], axis=1).drop('null', axis=1)
+            # use cohort as df name
+            c_data.name = cohort
 
-                # fill missing values in each col
-                c_data.cohort = c_data.cohort.ffill()
-                c_data['first_loan_local_disbursement_month'] = \
-                    c_data['first_loan_local_disbursement_month'].ffill()
-                c_data['months_since_first_loan_disbursed'] = \
-                    c_data['months_since_first_loan_disbursed'].fillna(times_dict).astype(int)
+            # fill missing values in each col
+            c_data.cohort = c_data.cohort.ffill()
+            c_data['first_loan_local_disbursement_month'] = \
+                c_data['first_loan_local_disbursement_month'].ffill()
+            c_data['months_since_first_loan_disbursed'] = \
+                c_data['months_since_first_loan_disbursed'].fillna(times_dict).astype(int)
 
-                # label forecasted data
-                c_data.data_type = c_data.data_type.fillna('forecast')
+            # label forecasted data
+            c_data.data_type = c_data.data_type.fillna('forecast')
 
-                dfs.append(c_data)
+            dfs.append(c_data)
+
         data = pd.concat(dfs)
 
         self.ret_expectations = []
 
         def forecast_retention(weights=retention_weights):
-            forecast_dfs = []
+            retention_forecasts = []
             # forecast the first cohort
             for i, cohort in enumerate(data.cohort.unique()):
                 c_data = data[data.cohort == cohort].copy()
@@ -216,9 +206,9 @@ class ARLTCatBoost(DataManager):
 
                 # generate subsequent forecasts
                 else:
-                    # check how many expectations we have
                     n_expectations = len(self.ret_expectations)
 
+                    # n_samples is equal to the number of expectations available up to a max of len(weights)
                     if n_expectations <= len(weights):
                         n_samples = n_expectations
                     else:
@@ -226,9 +216,11 @@ class ARLTCatBoost(DataManager):
 
                     weighted_sum = pd.Series(np.zeros(n_months), index=self.ret_expectations[0].index)
 
+                    # weighted sum of the expectation curves
                     for j in range(1, n_samples+1):
                         weighted_sum += self.ret_expectations[-j] * weights[-j]
 
+                    # divide by sum of weights to get the weighted average
                     weighted_expectation = weighted_sum / sum(weights[-n_samples:])
 
                     retention_fcast = list(c_data[c_data.data_type == 'actual']['borrower_retention'].copy())
@@ -251,14 +243,14 @@ class ARLTCatBoost(DataManager):
 
                     c_data['count_borrowers'] = pd.Series(fcast_count, index=times).astype(int)
 
-                forecast_dfs.append(c_data)
+                retention_forecasts.append(c_data)
 
-            return pd.concat(forecast_dfs)
+            return pd.concat(retention_forecasts)
 
         data = forecast_retention()
 
         def forecast_dependents():
-            forecast_dfs = []
+            dependent_forecasts = []
             for cohort in data.cohort.unique():
                 # data for current cohort
                 c_data = data[data.cohort == cohort].copy()
@@ -278,9 +270,9 @@ class ARLTCatBoost(DataManager):
                     (c_data['loans_per_borrower']) * c_data['count_borrowers'])).astype(int)
 
                 # add the forecasted data for the cohort to a list, aggregating all cohort forecasts
-                forecast_dfs.append(c_data)
+                dependent_forecasts.append(c_data)
 
-            return pd.concat(forecast_dfs)
+            return pd.concat(dependent_forecasts)
 
         data = forecast_dependents()
 
@@ -307,7 +299,7 @@ class ARLTCatBoost(DataManager):
 
             model.grid_search(grid, train_dataset, verbose=False)
 
-            dfs = []
+            default_forecasts = []
             for c in data.cohort.unique():
                 c_data = data[data.cohort == c].copy()
 
@@ -341,9 +333,9 @@ class ARLTCatBoost(DataManager):
                     c_data['default_rate_7dpd'] += self.default_stress
                     c_data['default_rate_365dpd'] += self.default_stress
 
-                dfs.append(c_data)
+                default_forecasts.append(c_data)
 
-            return pd.concat(dfs)
+            return pd.concat(default_forecasts)
 
         data = forecast_defaults()
 
@@ -396,123 +388,6 @@ class ARLTCatBoost(DataManager):
         # drop the last 2 cohorts since there's no forecast data
 
         return pd.concat(forecast_dfs)
-
-    def backtest_data(self, data, min_months=4, hold_months=4, fcast_months=50, metrics=None,
-                      retention_weights=(1, 1.5, 1.5, 2, 2)):
-        """
-        Backtest forecasted values against actuals.
-
-        Parameters
-        ----------
-
-
-        """
-        self.label_cols = ['first_loan_local_disbursement_month', 'total_interest_assessed', 'total_rollover_charged',
-                           'total_rollover_reversed', 'months_since_first_loan_disbursed', 'default_rate_amount_7d',
-                           'default_rate_amount_30d', 'default_rate_amount_51d', 'cohort', 'data_type']
-        self.min_months = min_months
-
-        if metrics is None:
-            metrics = ['rmse', 'me', 'mape', 'mpe']
-        cohort_count = 0
-        for cohort in data.cohort.unique():
-            if len(data[data.cohort == cohort]) - hold_months >= self.min_months:
-                cohort_count += 1
-
-        # print the number of cohorts that will be backtested.
-        self.backtest_months = hold_months
-        print(f'Backtesting {hold_months} months.')
-        print(f'{cohort_count} cohorts will be backtested.')
-
-        def compute_error(actual, forecast, metric):
-            """
-            Test forecast performance against actuals using method defined by metric.
-            """
-            # root mean squared error
-            if metric == 'rmse':
-                error = np.sqrt((1 / len(actual)) * sum((forecast[:len(actual)] - actual) ** 2))
-            # mean absolute error
-            elif metric == 'mae':
-                error = np.mean(abs(forecast[:len(actual)] - actual))
-            # mean error
-            elif metric == 'me':
-                error = np.mean(forecast[:len(actual)] - actual)
-            # mean absolute percent error
-            elif metric == 'mape':
-                error = round((1 / len(actual)) * sum(abs((forecast[:len(actual)] - actual) / actual)), 4)
-            # mean percent error
-            elif metric == 'mpe':
-                error = round((1 / len(actual)) * sum((forecast[:len(actual)] - actual) / actual), 4)
-            return error
-
-        # --- Generate backtest data --- #
-        backtest_report = []
-        backtest_data = []
-
-        # limit cohorts by min_months and actuals by hold_months
-        for cohort in data.cohort.unique():
-            # data for current cohort
-            c_data = data[data.cohort == cohort].copy()
-
-            # only backtest if remaining data has at least min_months of data
-            if len(c_data) - hold_months >= self.min_months:
-                # limit data
-                c_data = c_data.iloc[:len(c_data) - hold_months, :]
-                backtest_data.append(c_data)
-
-        backtest_data = pd.concat(backtest_data)
-
-        # create forecast on limited dataset
-        backtest = self.forecast_data(backtest_data, min_months=min_months, n_months=fcast_months,
-                                      retention_weights=retention_weights)
-
-        for cohort in backtest.cohort.unique():
-            # get forecast overlap with actuals
-            actual = self.data[self.data['first_loan_local_disbursement_month'] == cohort]
-            predicted = backtest[backtest.cohort == cohort]
-
-            # get indices of where forecast starts and actuals end, this should be equal to hold_months
-            start = predicted[predicted.data_type == 'forecast'].index.min()
-            stop = actual.index.max()
-
-            # the stop and start indices should always match the range of hold_months
-            assert stop - start + 1 == hold_months, f'{stop} - {start} is not equal to {hold_months}'
-
-            # compute errors
-            backtest_report_cols = []
-            errors = []
-
-            cols = [c for c in self.data.columns if c not in self.label_cols]
-
-            for col in cols:
-                for metric in metrics:
-                    if self.debug:
-                        print(f'Backtesting actuals: {actual.loc[start:stop, col]}')
-                        print(f'against forecast: {predicted.loc[start:stop, col]}')
-                    err = compute_error(actual.loc[start:stop, col], predicted.loc[start:stop, col],
-                                          metric=metric)
-
-                    backtest_report_cols += [f'{col}-{metric}']
-
-                    errors.append(err)
-
-            backtest_report.append(pd.DataFrame.from_dict({cohort: errors}, orient='index',
-                                                          columns=backtest_report_cols))
-
-        backtest_report = pd.concat(backtest_report, axis=0)
-        backtest_report['cohort'] = backtest_report.index
-
-        return backtest, backtest_report
-
-    def output_forecast(self):
-        return self.forecast.drop(['total_rollover_charged',
-                                   'total_rollover_reversed',
-                                   'default_rate_amount_7d',
-                                   'default_rate_amount_30d',
-                                   'default_rate_amount_51d',
-                                   'default_rate_amount_365d'],
-                                  axis=1
-                                  )
 
 
 # --- AUTO REGRESSION: Low Tenure Retention Only--- #
@@ -896,117 +771,6 @@ class AutoRegressionLT(DataManager):
         # drop the last 2 cohorts since there's no forecast data
 
         return pd.concat(forecast_dfs)
-
-    def backtest_data(self, data, min_months=4, hold_months=4, fcast_months=50, metrics=None,
-                      retention_weights=(1, 1, 1)):
-        """
-        Backtest forecasted values against actuals.
-
-        Parameters
-        ----------
-
-
-        """
-        self.label_cols = ['first_loan_local_disbursement_month', 'total_interest_assessed', 'total_rollover_charged',
-                           'total_rollover_reversed', 'months_since_first_loan_disbursed', 'default_rate_amount_7d',
-                           'default_rate_amount_30d', 'default_rate_amount_51d', 'cohort', 'data_type']
-        self.min_months = min_months
-
-        if metrics is None:
-            metrics = ['rmse', 'me', 'mape', 'mpe']
-        cohort_count = 0
-        for cohort in data.cohort.unique():
-            if len(data[data.cohort == cohort]) - hold_months >= self.min_months:
-                cohort_count += 1
-
-        # print the number of cohorts that will be backtested.
-        self.backtest_months = hold_months
-        print(f'Backtesting {hold_months} months.')
-        print(f'{cohort_count} cohorts will be backtested.')
-
-        def compute_error(actual, forecast, metric):
-            """
-            Test forecast performance against actuals using method defined by metric.
-            """
-            # root mean squared error
-            if metric == 'rmse':
-                error = np.sqrt((1 / len(actual)) * sum((forecast[:len(actual)] - actual) ** 2))
-            # mean absolute error
-            elif metric == 'mae':
-                error = np.mean(abs(forecast[:len(actual)] - actual))
-            # mean error
-            elif metric == 'me':
-                error = np.mean(forecast[:len(actual)] - actual)
-            # mean absolute percent error
-            elif metric == 'mape':
-                error = round((1 / len(actual)) * sum(abs((forecast[:len(actual)] - actual) / actual)), 4)
-            # mean percent error
-            elif metric == 'mpe':
-                error = round((1 / len(actual)) * sum((forecast[:len(actual)] - actual) / actual), 4)
-            return error
-
-        # --- Generate backtest data --- #
-        backtest_report = []
-        backtest_data = []
-
-        # limit cohorts by min_months and actuals by hold_months
-        for cohort in data.cohort.unique():
-            # data for current cohort
-            c_data = data[data.cohort == cohort].copy()
-
-            # only backtest if remaining data has at least min_months of data
-            if len(c_data) - hold_months >= self.min_months:
-                # limit data
-                c_data = c_data.iloc[:len(c_data) - hold_months, :]
-                backtest_data.append(c_data)
-
-        backtest_data = pd.concat(backtest_data)
-
-        # create forecast on limited dataset
-        backtest = self.forecast_data(backtest_data, min_months=min_months, n_months=fcast_months,
-                                      retention_weights=retention_weights)
-
-        for cohort in backtest.cohort.unique():
-            # get forecast overlap with actuals
-            actual = self.data[self.data['first_loan_local_disbursement_month'] == cohort]
-            predicted = backtest[backtest.cohort == cohort]
-
-            start = backtest[backtest.data_type == 'forecast'].index.min()
-            stop = actual.index.max()
-
-            # compute errors
-            backtest_report_cols = []
-            errors = []
-
-            cols = [c for c in self.data.columns if c not in self.label_cols]
-            # cols.remove('count_first_loans')
-
-            for col in cols:
-                for metric in metrics:
-                    err = compute_error(actual.loc[start:stop, col], predicted.loc[start:stop, col],
-                                          metric=metric)
-
-                    backtest_report_cols += [f'{col}-{metric}']
-
-                    errors.append(err)
-
-            backtest_report.append(pd.DataFrame.from_dict({cohort: errors}, orient='index',
-                                                          columns=backtest_report_cols))
-
-        backtest_report = pd.concat(backtest_report, axis=0)
-        backtest_report['cohort'] = backtest_report.index
-
-        return backtest, backtest_report
-
-    def output_forecast(self):
-        return self.forecast.drop(['total_rollover_charged',
-                                   'total_rollover_reversed',
-                                   'default_rate_amount_7d',
-                                   'default_rate_amount_30d',
-                                   'default_rate_amount_51d',
-                                   'default_rate_amount_365d'],
-                                  axis=1
-                                  )
 
 
 # --- POWER SLOPE MODEL --- #
