@@ -276,42 +276,49 @@ class ARLTCatBoost(DataManager):
 
         # ----- FORECAST DEFAULTS ----- #
         def forecast_defaults():
-            cols = ['first_loan_local_disbursement_month', 'months_since_first_loan_disbursed',
-                    'borrower_retention', 'count_loans', 'loan_size', 'default_rate_amount_7d']
+            # specify list of features to predict from
+            feature_cols = ['first_loan_local_disbursement_month', 'months_since_first_loan_disbursed',
+                            'borrower_retention', 'count_loans', 'loan_size']
+            # specify which column we're trying to predict
+            prediction_col = ['default_rate_amount_7d']
 
-            X = self.data[cols[:-1]].copy()
-            y = self.data[cols[-1:]].copy()
+            # X contains model features, y contains the output vector
+            X = self.data[feature_cols].copy()
+            y = self.data[prediction_col].copy()
 
             # train-test splits
             X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=5)
 
+            # grid defines the model parameter ranges to optimize over
             grid = {'iterations': [100, 150, 200],
                     'learning_rate': [0.1, .5, 1],
                     'depth': [2, 4, 6],
                     'l2_leaf_reg': [0.2, 0.5, 1, 3]}
 
-            train_dataset = cb.Pool(X_train, y_train,
-                                    cat_features=['first_loan_local_disbursement_month'])
+            # catboost's data processing class where we specify the categorical features
+            train_dataset = cb.Pool(X_train, y_train, cat_features=['first_loan_local_disbursement_month'])
 
             model = cb.CatBoostRegressor(loss_function='RMSE', logging_level='Silent')
 
+            # grid_search will fit the model with the optimal hyperparameters
             model.grid_search(grid, train_dataset, verbose=False)
 
             default_forecasts = []
             for c in data.cohort.unique():
                 c_data = data[data.cohort == c].copy()
 
-                X_pred = c_data[c_data.data_type == 'forecast'][cols[:-1]].copy()
+                # for each cohort we get the forecasted features, these are the inputs to the model
+                X_pred = c_data[c_data.data_type == 'forecast'][feature_cols].copy()
 
-                y_pred = model.predict(X_pred)
-                y_pred = pd.Series(y_pred, index=X_pred.index)
+                # for each cohort, the model predicts using the same optimal parameters found by grid_search
+                y_pred = pd.Series(model.predict(X_pred), index=X_pred.index)
 
                 # apply smoothing
                 y_pred = savgol_filter(y_pred, int((.25) * len(y_pred)), 2)
 
                 c_data.loc[X_pred.index, 'default_rate_7dpd'] = y_pred
 
-                # derive 51 and 365 dpd
+                # 51 and 365 dpd default rates are derived using recovery rates
                 for month in X_pred.index:
                     recovery_rate_7_30 = float(
                         self.recovery_rates[self.recovery_rates.month == month].loc[self.market, 'recovery_7-30'])
@@ -327,6 +334,7 @@ class ARLTCatBoost(DataManager):
                     c_data.loc[month, 'default_rate_51dpd'] = y_pred51
                     c_data.loc[month, 'default_rate_365dpd'] = y_pred365
 
+                # apply default rate stress if arg is passed
                 if self.default_stress:
                     c_data['default_rate_7dpd'] += self.default_stress
                     c_data['default_rate_365dpd'] += self.default_stress
@@ -338,19 +346,9 @@ class ARLTCatBoost(DataManager):
         data = forecast_defaults()
 
         forecast_dfs = []
-        # ----- FORECAST BY COHORT ----- #
+        # ----- Forecast remaining features ----- #
         for cohort in data.cohort.unique():
-            # data for current cohort
-            c_data = data[data.cohort == cohort].copy()
-            n_valid = len(c_data[c_data.data_type == 'actual'])
-
-            # --- ALL OTHERS --- #
-            # compute survival
-            c_data['borrower_survival'] = borrower_survival(c_data)
-
-            # forecast total_amount
-            c_data['total_amount'] = c_data['total_amount'].fillna(
-                (c_data['loan_size']) * c_data['count_loans'])
+            c_data = data[data.cohort == cohort].copy() # current cohort data
 
             # forecast Interest Rate
             for i in c_data[c_data.interest_rate.isnull()].index:
@@ -358,7 +356,8 @@ class ARLTCatBoost(DataManager):
                                                  self.expectations.loc[i, 'interest_rate'] / self.expectations.loc[
                                                      i - 1, 'interest_rate']
 
-            # compute remaining columns from forecasts
+            c_data['borrower_survival'] = borrower_survival(c_data)
+            c_data['total_amount'] = c_data['total_amount'].fillna((c_data['loan_size']) * c_data['count_loans'])
             c_data['total_interest_assessed'] = c_data['total_amount']*c_data['interest_rate']
             c_data['loans_per_original'] = loans_per_original(c_data)
             c_data['cumulative_loans_per_original'] = c_data['loans_per_original'].cumsum()
@@ -382,8 +381,6 @@ class ARLTCatBoost(DataManager):
 
             # add the forecasted data for the cohort to a list, aggregating all cohort forecasts
             forecast_dfs.append(c_data)
-
-        # drop the last 2 cohorts since there's no forecast data
 
         return pd.concat(forecast_dfs)
 
