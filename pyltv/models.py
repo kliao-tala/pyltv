@@ -546,7 +546,7 @@ class PowerSlope(DataManager):
                         return a * np.array(times)**b
 
                     # fit actuals and extract a & b params
-                    popt, pcov = curve_fit(power_fit, c.index, c)
+                    popt, pcov = curve_fit(power_fit, c.index, c, p0=[1, -0.7])
 
                     a = 1
                     b = popt[1]
