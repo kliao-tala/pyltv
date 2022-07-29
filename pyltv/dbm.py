@@ -161,7 +161,7 @@ class DBM:
             query_params = {'REPLACE_DATE': start_date,
                             'REPLACE_DAYS': str(days_before)}
 
-        with open('queries/ke_ltv.sql') as f:
+        with open('queries/ltv_market_query.sql') as f:
             sql = f.read()
             for p in query_params:
                 sql = sql.replace(p, query_params[p])
