@@ -17,7 +17,7 @@ from cryptography.hazmat.primitives import serialization
 # --- DATABASE MANAGER --- #
 class DBM:
     """
-    Database manager object to handle all interactions with the snowflake.
+    Database manager class handles all interactions with snowflake.
 
     Parameters
     ----------

@@ -769,6 +769,8 @@ class PyLTV:
         """
         Performs various data cleaning steps to prepare data for model.
         """
+        if self.segment_by == 'credit_decile':
+
         # sort by months since first disbursement
         self.data = self.data.sort_values(['first_loan_local_disbursement_month',
                                            'months_since_first_loan_disbursed'])
