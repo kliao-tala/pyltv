@@ -2,7 +2,7 @@ WITH repayment_and_default AS (SELECT
       *,
       1=1 -- no filter on 'repayment_and_default.numerator_transaction_type_filter'
  AS NUMERATOR_TRANSACTION_TYPE_FILTER_FLAG
-      FROM  BUSINESS_DB.BI_REPORTING.REPAYMENT_AND_DEFAULT_KE
+      FROM  BUSINESS_DB.BI_REPORTING.REPAYMENT_AND_DEFAULT_MARKET
 
 
 
@@ -56,16 +56,16 @@ SELECT
 ,0)*(1000000*1.0)) AS DECIMAL(38,0))) + (TO_NUMBER(MD5(CASE WHEN  repayment_and_default.TRANSACTION_BEFORE_365D AND (((CASE WHEN (case when loan_balance_details.DESCRIPTION in ('PROCESSING_FEE','DEDUCTION','CENTRAL_GST','STATE_GST') then 0 else loan_balance_details.AMOUNT end) > 0 THEN 'CREDIT' ELSE 'DEBIT' END) = 'DEBIT')) AND ((repayment_and_default.DATE_PAST_DUE_365D     <= (TO_CHAR(TO_DATE(CONVERT_TIMEZONE('Africa/Nairobi', CURRENT_TIMESTAMP()) ), 'YYYY-MM-DD'))))  THEN  repayment_and_default.ID   ELSE NULL END
 ), 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX') % 1.0e27)::NUMERIC(38, 0) ) - SUM(DISTINCT (TO_NUMBER(MD5(CASE WHEN  repayment_and_default.TRANSACTION_BEFORE_365D AND (((CASE WHEN (case when loan_balance_details.DESCRIPTION in ('PROCESSING_FEE','DEDUCTION','CENTRAL_GST','STATE_GST') then 0 else loan_balance_details.AMOUNT end) > 0 THEN 'CREDIT' ELSE 'DEBIT' END) = 'DEBIT')) AND ((repayment_and_default.DATE_PAST_DUE_365D     <= (TO_CHAR(TO_DATE(CONVERT_TIMEZONE('Africa/Nairobi', CURRENT_TIMESTAMP()) ), 'YYYY-MM-DD'))))  THEN  repayment_and_default.ID   ELSE NULL END
 ), 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX') % 1.0e27)::NUMERIC(38, 0)) )  AS DOUBLE PRECISION) / CAST((1000000*1.0) AS DOUBLE PRECISION), 0), 0), 0) AS "repayment_and_default.default_rate_amount_365d"
-FROM  BUSINESS_DB.CREDIT.PEOPLE_BASIC_KE
+FROM  BUSINESS_DB.CREDIT.PEOPLE_BASIC_MARKET
 
    AS credit_people_basic
-LEFT JOIN  BUSINESS_DB.CREDIT.APPLICATION_BASIC_KE
+LEFT JOIN  BUSINESS_DB.CREDIT.APPLICATION_BASIC_MARKET
 
    AS credit_application_basic ON credit_people_basic.PERSON_ID = credit_application_basic.PERSON_ID
-LEFT JOIN  BUSINESS_DB.CREDIT.LOAN_BASIC_KE
+LEFT JOIN  BUSINESS_DB.CREDIT.LOAN_BASIC_MARKET
 
    AS credit_loan_basic ON credit_application_basic.LOAN_APPLICATION_ID = credit_loan_basic.LOAN_APPLICATION_ID
-INNER JOIN  BUSINESS_DB.CREDIT.TRANSACTION_BASIC_KE
+INNER JOIN  BUSINESS_DB.CREDIT.TRANSACTION_BASIC_MARKET
     AS loan_balance_details ON credit_loan_basic.LOAN_APPLICATION_ID = loan_balance_details.CORR_LOAN_APPLICATION_ID
 INNER JOIN repayment_and_default ON loan_balance_details.ID = repayment_and_default.ID and  loan_balance_details.LOAN_APPLICATION_ID = repayment_and_default.LOAN_APPLICATION_ID
 WHERE ((credit_loan_basic.LOCAL_FIRST_LOAN_DISBURSED_TIME::TIMESTAMP_NTZ) ) >= (TO_TIMESTAMP('REPLACE_DATE')) AND ((( (credit_loan_basic.LOCAL_FIRST_LOAN_DISBURSED_TIME::TIMESTAMP_NTZ)) < (DATEADD('day', -REPLACE_DAYS, DATE_TRUNC('day', CONVERT_TIMEZONE('UTC', 'America/Los_Angeles', CAST(CURRENT_TIMESTAMP() AS TIMESTAMP_NTZ)))))))

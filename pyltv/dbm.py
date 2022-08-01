@@ -137,7 +137,7 @@ class DBM:
         """
         return pd.read_sql_query(query, self.engine)
 
-    def get_market_data(self, market='ke', start_date='2020-09-01', days_before=0):
+    def get_market_data(self, market='ke', segment_by=None, start_date='2020-09-01', days_before=0):
         """
         Query the database with the standard query from the LTV Looker dashboard. Search
         parameters are replaced with the inputs.
@@ -153,15 +153,24 @@ class DBM:
         days_before : int
             the number of days, prior to the current date, to query date up until
         """
-        if market != 'ke':
-            query_params = {'REPLACE_DATE': start_date,
-                            'REPLACE_DAYS': str(days_before),
-                            '_KE': f'_{market.upper()}'}
-        else:
+        if segment_by == 'credit_decile':
+            # name of query file to load
+            query_file = f'queries/ltv_by_{segment_by}_{market.lower()}.sql'
+
+            # parameters to replace in the query from args
             query_params = {'REPLACE_DATE': start_date,
                             'REPLACE_DAYS': str(days_before)}
 
-        with open('queries/ltv_market_query.sql') as f:
+        else:
+            # name of query file to load
+            query_file = 'queries/ltv_market_query.sql'
+
+            # parameters to replace in the query from args
+            query_params = {'REPLACE_DATE': start_date,
+                            'REPLACE_DAYS': str(days_before),
+                            '_MARKET': f'_{market.upper()}'}
+
+        with open(query_file) as f:
             sql = f.read()
             for p in query_params:
                 sql = sql.replace(p, query_params[p])
