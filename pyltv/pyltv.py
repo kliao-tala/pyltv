@@ -728,7 +728,7 @@ class PyLTV:
         Performs data cleaning steps required before modeling.
     """
 
-    def __init__(self, data, market, segment_by=None, to_usd=True, bake_duration=4):
+    def __init__(self, data, market, to_usd=True, bake_duration=4):
         """
         Parameters
         ----------
@@ -744,9 +744,8 @@ class PyLTV:
             of months is removed from the data during cleaning.
         """
         # set class attributes from args
-        self.data = data
+        self.data = data.copy()
         self.market = market
-        self.segment_by = segment_by
         self.to_usd = to_usd
         self.bake_duration = bake_duration
 
@@ -754,6 +753,7 @@ class PyLTV:
         self.config = config
 
         # placeholder attributes for forecast & backtest data
+        self.segment_by = None
         self.forecast = None
         self.backtest = None
         self.backtest_report = None
@@ -763,17 +763,32 @@ class PyLTV:
 
         # clean data and generate features
         self.clean_data()
-        self.data = self.generate_features(self.data)
+        # self.data = self.generate_features(self.data)
 
     def clean_data(self):
         """
         Performs various data cleaning steps to prepare data for model.
         """
-        if self.segment_by == 'credit_decile':
+        # detect if data is segmented
+        for c in self.data.columns:
+            if 'decile' in c:
+                segment = 'credit_decile'
+
+                # set attribute specifying segmentation type
+                self.segment_by = segment
+
+                # rename column
+                self.data.rename(columns={c: segment}, inplace=True)
+
+        # set sort by columns
+        if self.segment_by:
+            sort_by = ['first_loan_local_disbursement_month', 'months_since_first_loan_disbursed',
+                       self.segment_by]
+        else:
+            sort_by = ['first_loan_local_disbursement_month', 'months_since_first_loan_disbursed']
 
         # sort by months since first disbursement
-        self.data = self.data.sort_values(['first_loan_local_disbursement_month',
-                                           'months_since_first_loan_disbursed'])
+        self.data = self.data.sort_values(sort_by)
 
         # add cohort label column
         self.data['cohort'] = self.data['first_loan_local_disbursement_month']
